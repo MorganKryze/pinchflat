@@ -1,86 +1,185 @@
 name: Docker Release
 
+# A tag is the only thing that publishes a version, and `workflow_dispatch`
+# the only thing that publishes `dev`.
+#
+# Upstream also built on every push to master. On a fork that tracks upstream
+# that trigger fires on every rebase, republishing an image nobody asked for
+# from a merge nobody reviewed. Dropped on purpose.
+#
+# `release: published` is gone for a different reason: it made a GitHub
+# release object the thing that publishes, so the tag and the image could
+# disagree about what a version contains. The tag is the single source of
+# truth here, and the guard below makes it agree with mix.exs.
 on:
+  push:
+    tags: ["v*.*.*"]
   workflow_dispatch:
     inputs:
       platforms:
         type: choice
-        description: 'Build Platforms'
+        description: "Build platforms"
         required: true
-        default: 'linux/amd64'
+        default: "linux/amd64"
         options:
-          - 'linux/amd64'
-          - 'linux/amd64,linux/arm64'
-      docker_tags:
-        type: string
-        description: 'Docker Tags'
-        required: true
-        default: 'dev'
+          - "linux/amd64"
+          - "linux/amd64,linux/arm64"
 
-  push:
-    branches:
-      - master
-  release:
-    types:
-      - published
+# Least privilege by default; each job asks for what it writes.
+permissions:
+  contents: read
+
+# One release at a time, and not keyed on the ref: what two runs contend for
+# is `stable`, which every release writes and no ref distinguishes. Cancelling
+# is wrong here too. A release killed halfway leaves published tags behind
+# with nothing verified pointing at them.
+concurrency:
+  group: docker-release
+  cancel-in-progress: false
 
 jobs:
-  build_and_push_docker:
+  # Nothing is published that has not passed the suite on this exact ref.
+  # Upstream ran linting and the release side by side, so a tag could ship an
+  # image whose tests had never run against it.
+  test:
+    uses: ./.github/workflows/lint_and_test.yml
+
+  image:
+    needs: test
     runs-on: ubuntu-latest
-    env:
-      dev_arch: 'linux/amd64'
-      release_arch: 'linux/amd64,linux/arm64'
     permissions:
       contents: read
-      packages: write
+      packages: write # pushes the tags to ghcr.io
+      id-token: write # cosign signs keylessly against this workflow identity
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
+      # The tag and mix.exs are two places that record the same version, and
+      # `mix version.bump` writes only one of them. Catching the mismatch here
+      # costs a grep; catching it after publication means an image that reports
+      # a version it is not.
+      - name: the tag agrees with mix.exs
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 'version: "' mix.exs | cut -d '"' -f2)
+          [ "v${version}" = "$GITHUB_REF_NAME" ] || {
+            echo "::error::tag $GITHUB_REF_NAME does not match mix.exs version $version"
+            exit 1; }
+
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
         with:
-          images: |
-            docker.io/keglin/pinchflat
-            ghcr.io/${{ github.repository }}
-          # All non-release actions will be tagged as `dev` (ie: push, workflow_dispatch)
-          tags: |
-            type=ref,event=tag
-            type=raw,value=dev,enable=${{ github.event_name != 'release' && github.event_name != 'workflow_dispatch' }}
-            type=raw,value=${{ inputs.docker_tags }},enable=${{ github.event_name == 'workflow_dispatch' }}
-          flavor: |
-            latest=auto
+          # See the same pin in lint_and_test.yml for why this is here and why
+          # pins.yml has to watch it.
+          driver-opts: image=mirror.gcr.io/moby/buildkit@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8 # buildx-stable-1
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      # GHCR only. Docker Hub would cost two secrets, an account and a pull
+      # quota to publish the same bytes; the GITHUB_TOKEN already authenticates
+      # here and the job already holds `packages: write`. If Hub is ever wanted
+      # it belongs in a separate job that copies this digest, never as a second
+      # push target: an outage there would otherwise fail a release that is
+      # already complete.
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push
-        uses: docker/build-push-action@v6
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # Without this the action adds `latest` to the push by itself, which
+          # is exactly the tag that must not move before the signature has been
+          # verified. It is moved further down instead.
+          flavor: latest=false
+          # Versions are CalVer (`v2026.9.5`), which parses as semver, so the
+          # semver patterns work unchanged.
+          #
+          # `{{major}}` is deliberately absent: on CalVer it would mean "the
+          # last release of 2026", a tag that floats for a year and tells a
+          # puller nothing. `{{major}}.{{minor}}` is the last release of a
+          # given month, which is the useful one.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=dev,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=sha,prefix=
+
+      - id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ./docker/selfhosted.Dockerfile
-          # If the event is a release, use the release_arch, otherwise use the
-          # platforms input if present, falling back to dev_arch
-          platforms: ${{ github.event_name == 'release' && env.release_arch || (github.event.inputs.platforms || env.dev_arch) }}
+          # arm64 goes through QEMU and compiles Elixir plus the assets, which
+          # costs tens of minutes. A release pays it; a dispatch chooses.
+          platforms: ${{ startsWith(github.ref, 'refs/tags/') && 'linux/amd64,linux/arm64' || inputs.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          # SLSA provenance and a bill of materials, attached to the image, so
+          # a puller can see how it was built and what is inside it. Both are
+          # one line and cost nothing at pull time.
+          provenance: mode=max
+          sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Publish immutable, prove, then promote.
+      #
+      # Signing before publishing does not exist for OCI: a cosign signature is
+      # itself an object in the registry, next to the digest it covers, so
+      # there has to be something to sign first. What can be ordered is the
+      # part that hurts: `stable` and `latest` are the tags a puller is pointed
+      # at, and they are the only ones a failure here could leave pointing at
+      # something unsigned. So they are not in the list above.
+      #
+      # Keyless: the signature is bound to this workflow's identity, with no
+      # key to store or rotate. One signature covers the digest, whatever tags
+      # point at it.
+      - name: sign the image and prove the signature
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          # The image name comes out of the metadata action rather than out of
+          # github.repository: ghcr refuses the capital M in the owner, and the
+          # action has already lowercased it.
+          image=$(printf '%s\n' "$TAGS" | head -n1)
+          image="${image%%:*}"
+          cosign sign --yes "${image}@${DIGEST}"
+
+          # `cosign sign` exiting 0 is not proof that anyone else can verify
+          # the result, and nothing below moves a tag on the strength of an
+          # exit code alone.
+          cosign verify "${image}@${DIGEST}" \
+            --certificate-identity-regexp '^https://github.com/MorganKryze/pinchflat/' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+
+      # Retagging is a registry-side copy of the very index that was verified
+      # above, so the digest does not change and `stable` cannot exist
+      # unsigned. The equality check is not ceremony: if a future buildx ever
+      # rebuilt the index instead of copying it, the tag would point at an
+      # unsigned digest, and this is what would catch it.
+      - name: move stable and latest onto the verified digest
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for tag in stable latest; do
+            docker buildx imagetools create --tag "${IMAGE}:${tag}" "${IMAGE}@${DIGEST}"
+            moved=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "${IMAGE}:${tag}")
+            [ "$moved" = "$DIGEST" ] || {
+              echo "::error::${tag} points at ${moved}, not the signed ${DIGEST}"
+              exit 1
+            }
+          done

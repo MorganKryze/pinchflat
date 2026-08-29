@@ -4,32 +4,78 @@ on:
   push:
     branches:
       - master
+    # Every path the job below reads. A fork rebases on upstream regularly and
+    # most of those rebases touch nothing this job can judge; without a filter
+    # each one pays for a full image build plus the suite.
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "config/**"
+      - "priv/**"
+      - "assets/**"
+      - "tooling/**"
+      - "docker/**"
+      - "mix.exs"
+      - "mix.lock"
+      - "docker-compose.ci.yml"
+      - ".github/workflows/lint_and_test.yml"
+  # No paths filter here on purpose: this is a required check, and a required
+  # check that never runs leaves a docs-only pull request waiting forever.
   pull_request:
     branches:
       - master
   workflow_dispatch:
+  # docker_release.yml calls this so that nothing is published without the
+  # suite having passed on the exact ref being published. Upstream ran the two
+  # workflows side by side, which meant a release could ship an image whose
+  # tests had never run.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  # The job name is a required check on the protected branch, so it stays
+  # `build-and-test` whatever else it grows to run. A required check under a
+  # new name never runs, which leaves every pull request waiting for a job
+  # that no longer exists.
   build-and-test:
     name: Build, Lint, and Test
     runs-on: ubuntu-latest
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip ci]')"
     env:
       COMPOSE_FILE: ./docker-compose.ci.yml
       MIX_ENV: test
 
     steps:
+      # Pinned to a commit, like every action here. Dependabot moves them
+      # weekly (.github/dependabot.yml); the version comment is what makes the
+      # pin readable.
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Pull prebuilt images
         run: docker compose pull
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+        with:
+          # buildx pulls its own builder image, and the default comes from
+          # Docker Hub, where an anonymous pull shares one rate limit with
+          # every other GitHub-hosted runner. It does not fail by saying so,
+          # it times out. Read through Google's mirror and pinned by digest.
+          #
+          # Dependabot cannot watch an image named inside a workflow
+          # (dependabot-core#5541), so this pin would rot in silence. The
+          # buildkit-pin job in pins.yml is what stops that: it runs weekly and
+          # fails when buildx-stable-1 has moved past it.
+          driver-opts: image=mirror.gcr.io/moby/buildkit@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8 # buildx-stable-1
 
       - name: Build docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ./docker/dev.Dockerfile

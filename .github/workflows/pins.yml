@@ -1,0 +1,45 @@
+name: pins
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The one pinned thing nothing else watches.
+  #
+  # Every action in these workflows is pinned to a commit, and the buildkit
+  # image the builder runs is pinned to a digest for the same reason: it
+  # executes during the build, with the repository in reach. Dependabot moves
+  # the actions, but it does not read an image named inside a workflow
+  # (dependabot-core#5541), so that digest is the one pin with nobody behind
+  # it. Left alone it would quietly freeze the builder on whatever was current
+  # the day it was written, which is a worse place to be than following a tag.
+  #
+  # So this fails, weekly, once buildx-stable-1 has moved past the pin. Never
+  # on a pull request: a buildkit release is no reason to stop a merge.
+  buildkit-pin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: buildx-stable-1 still points at the digest we build with
+        run: |
+          set -euo pipefail
+          # The two files by name, not a glob: a glob would include this one,
+          # and the pattern below would then match itself.
+          pinned=$(grep -hoE 'buildkit@sha256:[0-9a-f]{64}' \
+            .github/workflows/lint_and_test.yml \
+            .github/workflows/docker_release.yml | sort -u)
+          test "$(echo "$pinned" | wc -l)" -eq 1 || {
+            echo "::error::the workflows pin different buildkit digests: $pinned"; exit 1; }
+          pinned=${pinned#buildkit@}
+          current=$(docker buildx imagetools inspect \
+            mirror.gcr.io/moby/buildkit:buildx-stable-1 --format '{{.Manifest.Digest}}')
+          echo "pinned:  $pinned"
+          echo "current: $current"
+          test "$pinned" = "$current" || {
+            echo "::error::buildx-stable-1 is now $current; bump the pin in lint_and_test.yml and docker_release.yml"
+            exit 1; }

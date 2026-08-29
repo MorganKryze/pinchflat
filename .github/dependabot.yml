@@ -1,0 +1,24 @@
+version: 2
+
+# Every action in the workflows is pinned to a commit rather than to a moving
+# tag, which is only defensible if something moves the pins. This is that
+# something. Without it the pins freeze on whatever was current the day they
+# were written, which is worse than following a tag.
+#
+# cooldown holds a new version back for a week before it is ever proposed,
+# the window in which a compromised release is usually pulled. It applies to
+# version updates only, never to a security update, so a real fix still
+# arrives the day it is published.
+#
+# github-actions only. The mix dependencies belong to upstream and a fork
+# opening its own pull requests against them would fight every rebase, and
+# the docker ecosystem cannot read these Dockerfiles anyway: they name their
+# base images through `FROM ${BUILDER_IMAGE}`, which Dependabot does not
+# resolve. The buildkit digest is watched by pins.yml instead.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
