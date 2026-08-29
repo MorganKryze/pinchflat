@@ -104,7 +104,21 @@ RUN apt-get update -y && \
       unzip \
       procps && \
     # Install Deno - required for YouTube downloads (See yt-dlp#14404)
-    curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s -- -y --no-modify-path && \
+    #
+    # Unzipped rather than installed through install.sh, which runs `deno` once it has
+    # unpacked it, to set up shell completions. Running it is what breaks the arm64 build:
+    # this image is cross-built under QEMU, Deno's aarch64 binary uses instructions QEMU
+    # does not emulate, and the build dies with SIGILL right after "Deno was installed
+    # successfully". Nothing here needs Deno to run at build time - yt-dlp calls it on
+    # real hardware, where it works.
+    export DENO_DOWNLOAD=$(case ${TARGETPLATFORM:-linux/amd64} in \
+    "linux/amd64")   echo "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip"  ;; \
+    "linux/arm64")   echo "https://github.com/denoland/deno/releases/latest/download/deno-aarch64-unknown-linux-gnu.zip" ;; \
+    *)               echo "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip"  ;; esac) && \
+    curl -fL ${DENO_DOWNLOAD} -o /tmp/deno.zip && \
+    unzip -o /tmp/deno.zip -d /usr/local/bin && \
+    chmod a+rx /usr/local/bin/deno && \
+    rm -f /tmp/deno.zip && \
     # Apprise
     export PIPX_HOME=/opt/pipx && \
     export PIPX_BIN_DIR=/usr/local/bin && \
@@ -116,9 +130,13 @@ RUN apt-get update -y && \
     *)               echo "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"        ;; esac) && \
     # -f for the same reason as ffmpeg above: without it a 404 page is written here,
     # made executable, and every yt-dlp call in the running container fails obscurely.
+    #
+    # No `yt-dlp -U` afterwards. The URL above is releases/latest, so the binary already
+    # is the latest release and updating it to the latest release does nothing - except
+    # execute it, which under QEMU is the same trap Deno just fell into. The runtime
+    # update worker keeps it current from here.
     curl -fL ${YT_DLP_DOWNLOAD} -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp && \
-    yt-dlp -U && \
     # Set the locale
     sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen && \
     # Clean up
