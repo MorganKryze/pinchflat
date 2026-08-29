@@ -92,8 +92,12 @@ cosign verify ghcr.io/morgankryze/pinchflat:2026.8.29 \
 the copy goes through `VACUUM INTO` rather than through the filesystem, and you get a
 consistent single file whatever state the write-ahead log is in. It lands beside the
 database as `pinchflat.pre-migration-<timestamp>.db`. A boot with nothing pending copies
-nothing. If the copy fails the boot stops rather than migrating without it, and the log
-says so. Delete the file once the upgrade has proven itself; nothing prunes it for you.
+nothing. Delete the file once the upgrade has proven itself; nothing prunes it for you.
+
+A failed copy stops the boot rather than migrating without it. The copy needs about as
+much free space as the database uses, so a full disk is the realistic cause, and the log
+says as much. Set `SKIP_MIGRATION_BACKUP=1` if you would rather migrate anyway, having
+copied the database yourself.
 
 Once it is up, ask it what it knows. The token is in the OPML feed URL on any source page:
 
@@ -315,6 +319,7 @@ If you change this setting and it works well for you, please leave a comment on 
 | `YT_DLP_WORKER_CONCURRENCY`   | No        | `2`                       | The number of concurrent workers that use `yt-dlp` _per queue_. Set to 1 if you're getting IP limited, otherwise don't touch it                                                                                          |
 | `ENABLE_PROMETHEUS`           | No        | `false`                   | Setting to _any_ non-blank value will enable Prometheus. See [docs](https://github.com/kieraneglin/pinchflat/wiki/Prometheus-and-Grafana)                                                                                |
 | `ORPHANED_JOB_RESCUE_MINUTES` | No        | `120`                     | How long a job may sit `executing` before Oban assumes the node running it is gone and hands it back. Must exceed the longest download this instance can legitimately run, or a slow download is mistaken for a dead one |
+| `SKIP_MIGRATION_BACKUP`       | No        |                           | Set to any non-blank value to migrate without copying the database first. The copy needs roughly as much free space as the database uses, so a full disk is the realistic reason to need this                            |
 
 ### Reverse Proxies
 

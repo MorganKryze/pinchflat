@@ -91,6 +91,14 @@ defmodule Pinchflat.Release do
   # disk is not the whole story and copying it can catch a partial write. This asks SQLite
   # for a consistent single-file snapshot instead, whatever state the WAL is in.
   defp backup_database(repo, label \\ "pre-migration") do
+    if System.get_env("SKIP_MIGRATION_BACKUP") in [nil, ""] do
+      write_backup(repo, label)
+    else
+      Logger.warning("SKIP_MIGRATION_BACKUP is set, migrating without a copy of the database")
+    end
+  end
+
+  defp write_backup(repo, label) do
     stamp = Calendar.strftime(DateTime.utc_now(), "%Y%m%d%H%M%S")
     path = Path.join(database_directory(repo), "pinchflat.#{label}-#{stamp}.db")
 
@@ -103,7 +111,20 @@ defmodule Pinchflat.Release do
       {:error, error} ->
         # Loud, and fatal. Migrating without the copy the operator was told they would get
         # is worse than not migrating.
-        Logger.error("Could not back up the database: #{inspect(error)}")
+        # A copy needs as much free space as the database uses, so the realistic cause is
+        # a full disk. Refusing to migrate is the right default, but a container that will
+        # not boot and offers no way out is not - hence the escape hatch, named in the
+        # message so nobody has to go looking for it.
+        Logger.error("""
+        Could not back up the database before migrating: #{inspect(error)}
+
+        The most likely cause is not enough free space next to the database, since the
+        copy needs roughly as much room as the database itself.
+
+        Free some space, or set SKIP_MIGRATION_BACKUP=1 to migrate without a copy. If you
+        take that route, copy the database yourself first.
+        """)
+
         raise "Database backup failed, refusing to migrate"
     end
   end
