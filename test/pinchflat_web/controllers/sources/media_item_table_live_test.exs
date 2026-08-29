@@ -69,12 +69,28 @@ defmodule PinchflatWeb.Sources.MediaItemTableLiveTest do
       refute html =~ pending_media_item.title
     end
 
-    test "shows 'Manually Ignored' column when other", %{conn: conn, source: source} do
+    test "shows the ignored column when other", %{conn: conn, source: source} do
       _media_item = media_item_fixture(source_id: source.id, prevent_download: true, media_filepath: nil)
 
       {:ok, _view, html} = live_isolated(conn, MediaItemTableLive, session: create_session(source, "other"))
 
-      assert html =~ "Manually Ignored?"
+      # Not "Manually Ignored": a user script can set prevent_download too, so the column
+      # has never only meant a human clicked something.
+      assert html =~ "Ignored?"
+    end
+
+    test "shows why a media item was ignored when something recorded a reason", %{conn: conn, source: source} do
+      _media_item =
+        media_item_fixture(
+          source_id: source.id,
+          prevent_download: true,
+          blocked_reason: "Blocked by a user script (exit code 3)",
+          media_filepath: nil
+        )
+
+      {:ok, _view, html} = live_isolated(conn, MediaItemTableLive, session: create_session(source, "other"))
+
+      assert html =~ "Blocked by a user script (exit code 3)"
     end
   end
 

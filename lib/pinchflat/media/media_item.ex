@@ -43,6 +43,7 @@ defmodule Pinchflat.Media.MediaItem do
     :last_error,
     # These are user or system controlled fields
     :prevent_download,
+    :blocked_reason,
     :prevent_culling,
     :culled_at,
     :media_redownloaded_at
@@ -91,6 +92,10 @@ defmodule Pinchflat.Media.MediaItem do
 
     field :last_error, :string
     field :prevent_download, :boolean, default: false
+    # Why `prevent_download` was set, if anything set it automatically. Unlike `last_error`
+    # this is never cleared by a later attempt - a media item nothing will attempt again
+    # has to keep saying why.
+    field :blocked_reason, :string
     field :prevent_culling, :boolean, default: false
     field :culled_at, :utc_datetime
 

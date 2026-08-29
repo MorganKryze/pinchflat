@@ -15,6 +15,23 @@ defmodule PinchflatWeb.MediaItemControllerTest do
       assert html_response(conn, 200) =~ "#{media_item.title}"
     end
 
+    test "shows why a media item is being skipped", %{conn: conn} do
+      media_item =
+        media_item_fixture(%{prevent_download: true, blocked_reason: "Blocked by a user script (exit code 3)"})
+
+      conn = get(conn, ~p"/sources/#{media_item.source_id}/media/#{media_item}")
+      html = html_response(conn, 200)
+
+      assert html =~ "Not Being Downloaded"
+      assert html =~ "Blocked by a user script (exit code 3)"
+    end
+
+    test "says nothing about being skipped when it is not", %{conn: conn, media_item: media_item} do
+      conn = get(conn, ~p"/sources/#{media_item.source_id}/media/#{media_item}")
+
+      refute html_response(conn, 200) =~ "Not Being Downloaded"
+    end
+
     test "renders the page when the media item has no description", %{conn: conn} do
       media_item = media_item_with_attachments(%{description: nil})
       conn = get(conn, ~p"/sources/#{media_item.source_id}/media/#{media_item}")

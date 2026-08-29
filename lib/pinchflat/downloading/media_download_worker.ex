@@ -97,13 +97,24 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
 
   # If a user script exists and, when run, returns a non-zero exit code, prevent this and all future downloads
   # of the media item.
+  #
+  # NOTE: this used to set prevent_download and nothing else - no log line, no stored
+  # reason. A media item would go quiet forever and the only way to find out why was to
+  # read the user's own script. The exit code is now recorded, because a media item that
+  # will never be attempted again has to be able to say what stopped it.
   defp fetch_and_run_prevent_download_user_script(media_item_id) do
     media_item = Media.get_media_item!(media_item_id)
 
     {:ok, media_item} =
       case run_user_script(:media_pre_download, media_item) do
-        {:ok, _, exit_code} when exit_code != 0 -> Media.update_media_item(media_item, %{prevent_download: true})
-        _ -> {:ok, media_item}
+        {:ok, _, exit_code} when exit_code != 0 ->
+          reason = "Blocked by the media_pre_download user script (exit code #{exit_code})"
+          Logger.info("Media item ##{media_item.id}: #{reason}")
+
+          Media.update_media_item(media_item, %{prevent_download: true, blocked_reason: reason})
+
+        _ ->
+          {:ok, media_item}
       end
 
     Repo.preload(media_item, :source)

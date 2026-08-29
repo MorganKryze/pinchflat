@@ -184,6 +184,29 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
       end)
     end
 
+    test "records why a user script blocked the media item", %{media_item: media_item} do
+      expect(UserScriptRunnerMock, :run, fn :media_pre_download, _data -> {:ok, "", 3} end)
+
+      perform_job(MediaDownloadWorker, %{id: media_item.id})
+
+      media_item = Media.get_media_item!(media_item.id)
+
+      # prevent_download used to be set on its own, which left a media item nothing would
+      # ever attempt again and nothing anywhere saying what stopped it.
+      assert media_item.prevent_download
+      assert media_item.blocked_reason =~ "media_pre_download user script"
+      assert media_item.blocked_reason =~ "3"
+    end
+
+    test "leaves blocked_reason alone when the user script is happy", %{media_item: media_item} do
+      perform_job(MediaDownloadWorker, %{id: media_item.id})
+
+      media_item = Media.get_media_item!(media_item.id)
+
+      refute media_item.prevent_download
+      refute media_item.blocked_reason
+    end
+
     test "ensures error are returned in a 2-item tuple", %{media_item: media_item} do
       expect(YtDlpRunnerMock, :run, 2, fn
         _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}

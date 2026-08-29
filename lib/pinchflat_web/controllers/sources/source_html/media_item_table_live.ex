@@ -63,8 +63,21 @@ defmodule PinchflatWeb.Sources.MediaItemTableLive do
             </span>
           </section>
         </:col>
-        <:col :let={media_item} :if={@media_state == "other"} label="Manually Ignored?">
-          <.icon name={if media_item.prevent_download, do: "hero-check", else: "hero-x-mark"} />
+        <:col :let={media_item} :if={@media_state == "other"} label="Ignored?">
+          <%!-- Not always manual: a user script can set this too, and when it does the
+                reason is the only thing that explains a media item nothing will retry. --%>
+          <.tooltip
+            :if={media_item.blocked_reason}
+            tooltip={media_item.blocked_reason}
+            position="bottom-right"
+            tooltip_class="w-64"
+          >
+            <.icon name={if media_item.prevent_download, do: "hero-check", else: "hero-x-mark"} />
+          </.tooltip>
+          <.icon
+            :if={!media_item.blocked_reason}
+            name={if media_item.prevent_download, do: "hero-check", else: "hero-x-mark"}
+          />
         </:col>
         <:col :let={media_item} label="Upload Date">
           {DateTime.to_date(media_item.uploaded_at)}
@@ -217,6 +230,6 @@ defmodule PinchflatWeb.Sources.MediaItemTableLive do
 
   # Selecting only what we need GREATLY speeds up queries on large tables
   defp select_fields do
-    [:id, :title, :uploaded_at, :prevent_download, :last_error]
+    [:id, :title, :uploaded_at, :prevent_download, :blocked_reason, :last_error]
   end
 end
