@@ -40,6 +40,27 @@ defmodule Pinchflat.Boot.PreJobStartupTasksTest do
     end
   end
 
+  describe "clear_stale_queue_pause" do
+    test "clears a pause left over from before the restart" do
+      Settings.set(
+        download_backoff_paused_until: DateTime.utc_now() |> DateTime.add(30, :minute) |> DateTime.truncate(:second)
+      )
+
+      PreJobStartupTasks.init(%{})
+
+      # Oban's pause lives in memory and does not survive a restart, while this setting
+      # does. Left alone the two disagree, and the backoff declines to stop queues that
+      # are in fact running, for the rest of the window.
+      assert Settings.get!(:download_backoff_paused_until) == nil
+    end
+
+    test "does nothing when no pause was set" do
+      PreJobStartupTasks.init(%{})
+
+      assert Settings.get!(:download_backoff_paused_until) == nil
+    end
+  end
+
   describe "create_blank_yt_dlp_files" do
     test "creates a blank cookie file" do
       base_dir = Application.get_env(:pinchflat, :extras_directory)

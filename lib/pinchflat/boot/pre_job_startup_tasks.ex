@@ -42,6 +42,7 @@ defmodule Pinchflat.Boot.PreJobStartupTasks do
   def init(state) do
     ensure_tmpfile_directory()
     reset_executing_jobs()
+    clear_stale_queue_pause()
     create_blank_yt_dlp_files()
     create_blank_user_script_file()
     apply_default_settings()
@@ -68,6 +69,27 @@ defmodule Pinchflat.Boot.PreJobStartupTasks do
       |> Repo.update_all(set: [state: "retryable"])
 
     Logger.info("Reset #{count} executing jobs")
+  end
+
+  # Oban's queue pause lives in memory and does not survive a restart, while the setting
+  # recording it does. Left alone, the two disagree: the queues come back running and the
+  # backoff believes they are still stopped, so it declines to stop them again for the
+  # rest of the window - downloading against a blocked address with the protection
+  # silently switched off. Anything that restarts a container mid-block hits this every
+  # time, which includes any watchdog built to restart it during exactly that.
+  #
+  # Cleared rather than re-applied: a restart is a fresh start. If the block is still
+  # there, the next refusals trip the threshold again within minutes, and the failures
+  # that would trip it are already recorded.
+  defp clear_stale_queue_pause do
+    case Settings.get!(:download_backoff_paused_until) do
+      nil ->
+        :ok
+
+      until ->
+        Logger.info("Clearing a queue pause that was set to last until #{until}: a restart resets it")
+        Settings.set(download_backoff_paused_until: nil)
+    end
   end
 
   defp create_blank_yt_dlp_files do
