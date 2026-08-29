@@ -27,6 +27,13 @@ defmodule Pinchflat.YoutubeStatus do
   A window where nothing was attempted says nothing about YouTube. On a library that has
   caught up with its sources that is most windows, and calling them green would report a
   download path that was never exercised. Green means a download got through.
+
+  ## Why `:disabled` only replaces `:idle`
+
+  The first four readings are measurements; `:disabled` is a decision. It explains quiet,
+  it does not overrule evidence: with indexing stopped by hand and downloading left on, a
+  refused download still reads as a refusal. Anything else would hide a real block behind
+  a switch that has nothing to do with it.
   """
 
   import Ecto.Query, warn: false
@@ -34,6 +41,7 @@ defmodule Pinchflat.YoutubeStatus do
   alias Pinchflat.Repo
   alias Pinchflat.Media.MediaItem
   alias Pinchflat.Downloading.DownloadErrors
+  alias Pinchflat.YoutubeStatus.Switches
   alias Pinchflat.YoutubeStatus.StatusSample
 
   # Both indexing workers, named as strings because that is how Oban stores them. Only
@@ -75,7 +83,7 @@ defmodule Pinchflat.YoutubeStatus do
     %StatusSample{}
     |> StatusSample.changeset(
       Map.merge(counts, %{
-        state: state_for(counts),
+        state: reading(counts),
         window_seconds: DateTime.diff(now, since)
       })
     )
@@ -143,7 +151,7 @@ defmodule Pinchflat.YoutubeStatus do
     since = DateTime.add(now, -hours, :hour)
     counts = measure(since, now)
 
-    Map.merge(counts, %{state: state_for(counts), since: since, until: now})
+    Map.merge(counts, %{state: reading(counts), since: since, until: now})
   end
 
   @doc """
@@ -180,7 +188,7 @@ defmodule Pinchflat.YoutubeStatus do
   # Worst state wins, so a block that lasted ten minutes still colours its bucket. Sorted
   # by how much trouble it reports, which puts a green sample above an idle one - a bucket
   # where something downloaded is a bucket where downloading worked.
-  @severity %{blocked: 3, degraded: 2, nominal: 1, idle: 0}
+  @severity %{blocked: 4, degraded: 3, nominal: 2, disabled: 1, idle: 0}
 
   defp summarise_bucket([], from, to) do
     %{state: :no_data, from: from, to: to, samples: 0}
@@ -199,6 +207,15 @@ defmodule Pinchflat.YoutubeStatus do
 
   defp count_fields do
     ~w(downloads download_failures connection_failures throttle_failures indexing_successes indexing_failures)a
+  end
+
+  # What `state_for/1` measured, unless nothing was measured and somebody had asked for
+  # that. Kept out of `state_for/1` so that function stays a pure reading of the counts.
+  defp reading(counts) do
+    case state_for(counts) do
+      :idle -> if Switches.any_paused?(), do: :disabled, else: :idle
+      state -> state
+    end
   end
 
   @doc """

@@ -12,12 +12,18 @@ defmodule PinchflatWeb.Pages.PageHTML do
   def status_headline(:degraded), do: "Indexing works, downloads do not"
   def status_headline(:blocked), do: "YouTube is refusing this address"
   def status_headline(:idle), do: "Nothing has been attempted"
+  def status_headline(:disabled), do: "Stopped on purpose"
 
   @doc """
   The counts behind a reading, written out.
 
   Returns binary()
   """
+  def status_detail(%{state: :disabled} = current) do
+    "Nothing ran in the last #{window_phrase(current)} because a switch below is off, " <>
+      "so there is nothing to report about YouTube."
+  end
+
   def status_detail(%{state: :idle} = current) do
     "Nothing was downloaded or indexed in the last #{window_phrase(current)}, so there is nothing to report."
   end
@@ -45,6 +51,10 @@ defmodule PinchflatWeb.Pages.PageHTML do
     "#{bucket_time(bucket)} - nothing attempted"
   end
 
+  def bucket_tooltip(%{state: :disabled} = bucket) do
+    "#{bucket_time(bucket)} - stopped by hand"
+  end
+
   def bucket_tooltip(bucket) do
     "#{bucket_time(bucket)} - #{bucket.downloads} downloaded, " <>
       "#{bucket.connection_failures} refused, #{bucket.indexing_successes} indexed"
@@ -60,6 +70,7 @@ defmodule PinchflatWeb.Pages.PageHTML do
   def status_colour(:degraded), do: "bg-meta-8"
   def status_colour(:blocked), do: "bg-meta-1"
   def status_colour(:idle), do: "bg-meta-4"
+  def status_colour(:disabled), do: "bg-meta-5"
   def status_colour(:no_data), do: "bg-boxdark-2"
 
   @doc """
@@ -72,6 +83,7 @@ defmodule PinchflatWeb.Pages.PageHTML do
   def status_border(:degraded), do: "border-meta-8"
   def status_border(:blocked), do: "border-meta-1"
   def status_border(:idle), do: "border-strokedark"
+  def status_border(:disabled), do: "border-meta-5"
 
   defp throttle_aside(%{throttle_failures: 0}), do: ""
   defp throttle_aside(%{throttle_failures: count}), do: " (#{count} throttled)"

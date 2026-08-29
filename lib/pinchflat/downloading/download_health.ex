@@ -18,6 +18,7 @@ defmodule Pinchflat.Downloading.DownloadHealth do
   alias Pinchflat.Media.MediaItem
   alias Pinchflat.Settings
   alias Pinchflat.Downloading.DownloadErrors
+  alias Pinchflat.YoutubeStatus.Switches
 
   # Oban states in which a job will still run. Anything else - completed, discarded,
   # cancelled - means nothing is going to pick that media item up again on its own.
@@ -56,7 +57,10 @@ defmodule Pinchflat.Downloading.DownloadHealth do
       yt_dlp_last_update_error: Settings.get!(:yt_dlp_last_update_error),
       # nil unless the yt-dlp queues are currently stopped. The one field here that says
       # "nothing is downloading and that is on purpose".
-      queues_paused_until: Settings.get!(:download_backoff_paused_until)
+      queues_paused_until: Settings.get!(:download_backoff_paused_until),
+      # The other reason nothing is downloading, and the one no amount of waiting fixes.
+      indexing_paused: Switches.paused?(:indexing),
+      downloading_paused: Switches.paused?(:downloading)
     }
   end
 

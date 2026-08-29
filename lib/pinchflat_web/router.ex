@@ -44,6 +44,7 @@ defmodule PinchflatWeb.Router do
 
     get "/", Pages.PageController, :home
     get "/youtube_status", Pages.PageController, :youtube_status
+    post "/youtube_status/:switch/:action", Pages.PageController, :youtube_status_switch
 
     resources "/media_profiles", MediaProfiles.MediaProfileController
     resources "/search", Searches.SearchController, only: [:show], singleton: true

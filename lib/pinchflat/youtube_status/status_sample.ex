@@ -20,7 +20,7 @@ defmodule Pinchflat.YoutubeStatus.StatusSample do
   @required_fields [:state, :window_seconds]
 
   schema "youtube_status_samples" do
-    field :state, Ecto.Enum, values: [:nominal, :degraded, :blocked, :idle]
+    field :state, Ecto.Enum, values: [:nominal, :degraded, :blocked, :idle, :disabled]
     field :downloads, :integer, default: 0
     field :download_failures, :integer, default: 0
     field :connection_failures, :integer, default: 0

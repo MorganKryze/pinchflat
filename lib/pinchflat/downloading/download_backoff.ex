@@ -31,6 +31,7 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
   alias Pinchflat.Settings
   alias Pinchflat.Downloading.DownloadHealth
   alias Pinchflat.Downloading.ResumeQueuesWorker
+  alias Pinchflat.YoutubeStatus.Switches
 
   # Every queue that reaches YouTube through yt-dlp. Pausing only `media_fetching` would
   # leave indexing and metadata still calling out on the same blocked address, which is
@@ -59,7 +60,7 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
   Returns :ok
   """
   def resume do
-    Enum.each(@yt_dlp_queues, &Oban.resume_queue(queue: &1))
+    Enum.each(resumable_queues(), &Oban.resume_queue(queue: &1))
     Settings.set(download_backoff_paused_until: nil)
     Logger.info("Download backoff lifted, yt-dlp queues resumed")
 
@@ -82,6 +83,21 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
   Returns [atom()]
   """
   def yt_dlp_queues, do: @yt_dlp_queues
+
+  @doc """
+  The queues a resume will actually restart: everything except what somebody stopped on
+  purpose.
+
+  This pauses more queues than the manual switches cover, so resuming the lot when the
+  block clears would silently undo a decision that has nothing to do with the block.
+
+  Returns [atom()]
+  """
+  def resumable_queues do
+    held = Switches.paused_queues()
+
+    Enum.reject(@yt_dlp_queues, &(&1 in held))
+  end
 
   defp currently_paused? do
     case paused_until() do

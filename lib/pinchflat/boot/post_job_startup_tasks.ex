@@ -11,6 +11,8 @@ defmodule Pinchflat.Boot.PostJobStartupTasks do
   use GenServer, restart: :temporary
   import Ecto.Query, warn: false
 
+  alias Pinchflat.YoutubeStatus.Switches
+
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, %{env: Application.get_env(:pinchflat, :env)}, opts)
   end
@@ -33,7 +35,9 @@ defmodule Pinchflat.Boot.PostJobStartupTasks do
   end
 
   def init(state) do
-    # Nothing at the moment!
+    # Oban's pauses do not survive a restart. The switches that set them do, so a queue
+    # somebody stopped on purpose comes back stopped rather than quietly running again.
+    Switches.apply_stored()
 
     {:ok, state}
   end

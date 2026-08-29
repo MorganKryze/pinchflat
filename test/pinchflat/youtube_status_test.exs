@@ -4,6 +4,7 @@ defmodule Pinchflat.YoutubeStatusTest do
   import Pinchflat.MediaFixtures
 
   alias Pinchflat.YoutubeStatus
+  alias Pinchflat.YoutubeStatus.Switches
   alias Pinchflat.YoutubeStatus.StatusSample
 
   @throttle "ERROR: [youtube] abc: Sign in to confirm you're not a bot. Use --cookies"
@@ -169,6 +170,38 @@ defmodule Pinchflat.YoutubeStatusTest do
       {:ok, sample} = YoutubeStatus.sample!()
 
       assert sample.window_seconds == 3600
+    end
+  end
+
+  describe "the disabled reading" do
+    test "explains quiet that somebody asked for" do
+      Switches.set(:downloading, true)
+
+      {:ok, sample} = YoutubeStatus.sample!()
+
+      assert sample.state == :disabled
+      assert YoutubeStatus.current().state == :disabled
+    end
+
+    test "does not overrule evidence" do
+      Switches.set(:indexing, true)
+      media_item_fixture(%{last_error: @throttle, last_error_at: minutes_ago(2)})
+
+      # Indexing was stopped by hand and downloading was not, so a refused download is
+      # still a refused download. Painting it blue would hide a real block behind a switch
+      # that has nothing to do with it.
+      {:ok, sample} = YoutubeStatus.sample!()
+
+      assert sample.state == :degraded
+    end
+
+    test "goes back to grey once the switch is off" do
+      Switches.set(:downloading, true)
+      Switches.set(:downloading, false)
+
+      {:ok, sample} = YoutubeStatus.sample!()
+
+      assert sample.state == :idle
     end
   end
 

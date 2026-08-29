@@ -52,6 +52,47 @@ defmodule PinchflatWeb.PageControllerTest do
     end
   end
 
+  describe "POST /youtube_status/:switch/:action" do
+    setup do
+      Settings.set(onboarding: false)
+      :ok
+    end
+
+    test "stops indexing and says so", %{conn: conn} do
+      conn = post(conn, ~p"/youtube_status/indexing/pause")
+
+      assert redirected_to(conn) == ~p"/youtube_status"
+      assert Pinchflat.YoutubeStatus.Switches.paused?(:indexing)
+    end
+
+    test "starts it again", %{conn: conn} do
+      Pinchflat.YoutubeStatus.Switches.set(:downloading, true)
+
+      conn = post(conn, ~p"/youtube_status/downloading/resume")
+
+      refute Pinchflat.YoutubeStatus.Switches.paused?(:downloading)
+      assert redirected_to(conn) == ~p"/youtube_status"
+    end
+
+    test "refuses a switch nobody defined", %{conn: conn} do
+      # The path parameter is mapped, never converted, so a made-up name cannot reach an
+      # atom or a queue.
+      conn = post(conn, ~p"/youtube_status/media_fetching/pause")
+
+      assert redirected_to(conn) == ~p"/youtube_status"
+      refute Pinchflat.YoutubeStatus.Switches.any_paused?()
+    end
+
+    test "the page then reads blue and offers to start it", %{conn: conn} do
+      post(conn, ~p"/youtube_status/downloading/pause")
+
+      response = html_response(get(conn, ~p"/youtube_status"), 200)
+
+      assert response =~ "Stopped on purpose"
+      assert response =~ "Start"
+    end
+  end
+
   describe "GET / when testing onboarding" do
     test "sets the onboarding setting to true when onboarding", %{conn: conn} do
       _conn = get(conn, ~p"/")

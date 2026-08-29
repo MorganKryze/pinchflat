@@ -26,6 +26,8 @@ defmodule Pinchflat.Settings.Setting do
     :download_backoff_threshold,
     :download_backoff_minutes,
     :download_backoff_paused_until,
+    :indexing_paused,
+    :downloading_paused,
     :set_aside_permanent_failures,
     :apply_yt_dlp_config_to_all_commands,
     :restrict_filenames
@@ -80,6 +82,12 @@ defmodule Pinchflat.Settings.Setting do
     # State rather than preference, kept in the open so "why is nothing downloading" has
     # an answer with a time on it instead of living inside a process.
     field :download_backoff_paused_until, :utc_datetime
+
+    # Stopping the queues by hand. Off by default, and separate from the backoff above:
+    # that one is a reaction and lifts itself, these are a decision and stay until you
+    # lift them. Oban's own pause lives in memory, so these are what survives a restart.
+    field :indexing_paused, :boolean, default: false
+    field :downloading_paused, :boolean, default: false
 
     # Whether a failure that can never succeed takes the media item out of rotation for
     # good. Off by default: upstream reconsiders these at every index, which is a

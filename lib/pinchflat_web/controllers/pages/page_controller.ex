@@ -6,6 +6,7 @@ defmodule PinchflatWeb.Pages.PageController do
   alias Pinchflat.Sources.Source
   alias Pinchflat.YoutubeStatus
   alias Pinchflat.Profiles.MediaProfile
+  alias Pinchflat.YoutubeStatus.Switches
   alias Pinchflat.Downloading.DownloadHealth
 
   # What each colour claims, said once so the page and the tests read the same list.
@@ -14,8 +15,15 @@ defmodule PinchflatWeb.Pages.PageController do
     degraded: "indexing works, downloads refused",
     blocked: "both refused",
     idle: "nothing attempted",
+    disabled: "stopped by hand",
     no_data: "nothing measuring"
   ]
+
+  # Mapped rather than converted, so a made-up path parameter cannot reach an atom or a
+  # queue name.
+  @switch_names %{"indexing" => :indexing, "downloading" => :downloading}
+  @switch_actions %{"pause" => true, "resume" => false}
+  @switch_labels %{indexing: "Indexing", downloading: "Downloading"}
 
   def home(conn, params) do
     done_onboarding = params["onboarding"] == "0"
@@ -35,8 +43,31 @@ defmodule PinchflatWeb.Pages.PageController do
       current: YoutubeStatus.current(),
       buckets: YoutubeStatus.history_buckets(),
       health: DownloadHealth.summary(24),
+      switches: switch_states(),
       legend: @legend
     )
+  end
+
+  def youtube_status_switch(conn, %{"switch" => switch, "action" => action}) do
+    case {Map.fetch(@switch_names, switch), Map.fetch(@switch_actions, action)} do
+      {{:ok, name}, {:ok, paused?}} ->
+        Switches.set(name, paused?)
+
+        conn
+        |> put_flash(:info, "#{@switch_labels[name]} #{if paused?, do: "stopped", else: "started"}")
+        |> redirect(to: ~p"/youtube_status")
+
+      _ ->
+        conn
+        |> put_flash(:error, "No such switch")
+        |> redirect(to: ~p"/youtube_status")
+    end
+  end
+
+  defp switch_states do
+    Enum.map(Switches.names(), fn name ->
+      %{name: name, label: @switch_labels[name], paused: Switches.paused?(name)}
+    end)
   end
 
   defp render_home_page(conn) do
