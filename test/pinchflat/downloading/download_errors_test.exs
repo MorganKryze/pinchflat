@@ -122,4 +122,31 @@ defmodule Pinchflat.Downloading.DownloadErrorsTest do
       refute DownloadErrors.throttled?(age)
     end
   end
+
+  describe "warnings printed alongside the verdict" do
+    # As it comes off a real instance: every refusal it recorded opens with this warning,
+    # which used to be fatal on an older yt-dlp and is now only a note on the way past.
+    @with_warning """
+    WARNING: [youtube] y1nTvXlf3Uo: No title found in player responses; falling back to title from initial data
+    ERROR: [youtube] y1nTvXlf3Uo: Sign in to confirm you\u2019re not a bot. Use --cookies-from-browser
+    """
+
+    test "the verdict decides, not the warning" do
+      assert DownloadErrors.classify(@with_warning) == :throttled
+    end
+
+    test "a throttle in the text beats a verdict on the video" do
+      message = """
+      WARNING: [youtube] abc: Video unavailable in this format, trying another
+      ERROR: [youtube] abc: Sign in to confirm you\u2019re not a bot.
+      """
+
+      # Both phrases are in the blob. "Video unavailable" is not retryable and would take
+      # the item out of rotation for good; the throttle is the one that explains why
+      # nothing was downloaded, and it clears on its own. First match wins and the throttle
+      # is listed first, which is the whole reason the order in @errors is deliberate.
+      assert DownloadErrors.classify(message) == :throttled
+      assert DownloadErrors.retryable?(message)
+    end
+  end
 end

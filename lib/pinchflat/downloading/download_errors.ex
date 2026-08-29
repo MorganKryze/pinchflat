@@ -40,6 +40,12 @@ defmodule Pinchflat.Downloading.DownloadErrors do
       is shown in a tooltip; the raw message is kept, but it is not the first thing seen.
   """
 
+  # Order matters: the first pattern that matches wins. yt-dlp prints its warnings and its
+  # verdict into one blob and all of it is kept in `last_error`, so a phrase can arrive
+  # from a line that decided nothing - `Video unavailable in this format, trying another`
+  # sits above a throttle on a real instance. A throttle is listed first for that reason:
+  # it is the only one of these that is not a verdict on the video, so when both are in
+  # the text it is the one that explains why nothing was downloaded. There is a test.
   @errors [
     %{
       key: :throttled,
