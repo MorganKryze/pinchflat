@@ -27,6 +27,7 @@ defmodule Pinchflat.Settings.Setting do
     :download_backoff_minutes,
     :download_backoff_paused_until,
     :set_aside_permanent_failures,
+    :apply_yt_dlp_config_to_all_commands,
     :restrict_filenames
   ]
 
@@ -84,6 +85,10 @@ defmodule Pinchflat.Settings.Setting do
     # good. Off by default: upstream reconsiders these at every index, which is a
     # defensible choice, since a video can be un-privated and an age restriction lifted.
     field :set_aside_permanent_failures, :boolean, default: false
+
+    # Whether the yt-dlp config cascade reaches indexing and metadata as well as
+    # downloads. Off by default: upstream scopes it to downloads on purpose.
+    field :apply_yt_dlp_config_to_all_commands, :boolean, default: false
 
     field :video_codec_preference, :string
     field :audio_codec_preference, :string

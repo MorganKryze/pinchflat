@@ -18,6 +18,7 @@ defmodule Pinchflat.FastIndexing.FastIndexingHelpers do
   alias Pinchflat.FastIndexing.YoutubeApi
   alias Pinchflat.Downloading.DownloadingHelpers
   alias Pinchflat.FastIndexing.FastIndexingWorker
+  alias Pinchflat.YtDlp.ConfigFiles
   alias Pinchflat.Downloading.DownloadOptionBuilder
 
   alias Pinchflat.YtDlp.Media, as: YtDlpMedia
@@ -96,7 +97,8 @@ defmodule Pinchflat.FastIndexing.FastIndexingHelpers do
 
     command_opts =
       [output: DownloadOptionBuilder.build_output_path_for(source)] ++
-        DownloadOptionBuilder.build_quality_options_for(source)
+        DownloadOptionBuilder.build_quality_options_for(source) ++
+        ConfigFiles.options_for_indexing(source)
 
     case YtDlpMedia.get_media_attributes(url, command_opts, use_cookies: should_use_cookies) do
       {:ok, media_attrs} ->

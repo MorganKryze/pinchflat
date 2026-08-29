@@ -74,6 +74,13 @@
       />
 
       <.input
+        field={f[:apply_yt_dlp_config_to_all_commands]}
+        type="toggle"
+        label="Apply yt-dlp Config Files To Indexing"
+        help="Your yt-dlp config files reach downloads only. Turn this on and they also reach indexing and metadata, which on a busy instance is most of the calls made and the ones that draw the most refusals. Useful for a plugin directory, a socket timeout or a player-client override; check first that your config holds nothing that only makes sense while downloading"
+      />
+
+      <.input
         field={f[:set_aside_permanent_failures]}
         type="toggle"
         label="Set Aside Permanent Failures"

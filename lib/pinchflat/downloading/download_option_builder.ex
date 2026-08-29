@@ -6,10 +6,9 @@ defmodule Pinchflat.Downloading.DownloadOptionBuilder do
   alias Pinchflat.Sources
   alias Pinchflat.Sources.Source
   alias Pinchflat.Media.MediaItem
+  alias Pinchflat.YtDlp.ConfigFiles
   alias Pinchflat.Downloading.OutputPathBuilder
   alias Pinchflat.Downloading.QualityOptionBuilder
-
-  alias Pinchflat.Utils.FilesystemUtils, as: FSUtils
 
   @doc """
   Builds the options for yt-dlp to download media based on the given media's profile.
@@ -157,32 +156,9 @@ defmodule Pinchflat.Downloading.DownloadOptionBuilder do
     end
   end
 
-  # This is put here instead of the CommandRunner module because it should only
-  # be applied to downloading - if it were in CommandRunner it would apply to
-  # all yt-dlp commands (like indexing)
-  defp config_file_options(media_item) do
-    base_dir = Path.join(Application.get_env(:pinchflat, :extras_directory), "yt-dlp-configs")
-    # Ordered by priority - the first file has the highest priority
-    filenames = [
-      "media-item-#{media_item.id}-config.txt",
-      "source-#{media_item.source_id}-config.txt",
-      "media-profile-#{media_item.source.media_profile_id}-config.txt",
-      "base-config.txt"
-    ]
-
-    config_filepaths =
-      Enum.reduce(filenames, [], fn filename, acc ->
-        filepath = Path.join(base_dir, filename)
-
-        if FSUtils.exists_and_nonempty?(filepath) do
-          [filepath | acc]
-        else
-          acc
-        end
-      end)
-
-    Enum.map(config_filepaths, fn filepath -> {:config_locations, filepath} end)
-  end
+  # The cascade itself lives in YtDlpConfigFiles now, because indexing needs it too and
+  # has no media item to hang it on.
+  defp config_file_options(media_item), do: ConfigFiles.options_for(media_item)
 
   defp output_options(media_item_with_preloads) do
     [

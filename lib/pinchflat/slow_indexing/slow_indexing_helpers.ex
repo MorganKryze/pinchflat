@@ -19,6 +19,7 @@ defmodule Pinchflat.SlowIndexing.SlowIndexingHelpers do
   alias Pinchflat.Utils.FilesystemUtils
   alias Pinchflat.Downloading.DownloadingHelpers
   alias Pinchflat.SlowIndexing.FileFollowerServer
+  alias Pinchflat.YtDlp.ConfigFiles
   alias Pinchflat.Downloading.DownloadOptionBuilder
   alias Pinchflat.SlowIndexing.MediaCollectionIndexingWorker
 
@@ -137,7 +138,8 @@ defmodule Pinchflat.SlowIndexing.SlowIndexingHelpers do
     command_opts =
       [output: DownloadOptionBuilder.build_output_path_for(source)] ++
         DownloadOptionBuilder.build_quality_options_for(source) ++
-        build_download_archive_options(source, was_forced)
+        build_download_archive_options(source, was_forced) ++
+        ConfigFiles.options_for_indexing(source)
 
     runner_opts = [file_listener_handler: handler, use_cookies: should_use_cookies]
     result = MediaCollection.get_media_attributes_for_collection(source.original_url, command_opts, runner_opts)
