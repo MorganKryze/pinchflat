@@ -208,8 +208,13 @@ defmodule Pinchflat.Downloading.MediaDownloader do
   end
 
   defp recoverable_cookie_errors do
+    # Same split as `action_on_error/1` in MediaDownloadWorker, and it matters more here:
+    # matching the prefix meant an IP throttle ("you're not a bot") triggered a second
+    # yt-dlp call carrying the user's cookies against an IP that is already being
+    # refused. Cookies cannot lift an IP throttle, so the retry only doubled the requests
+    # spent during the block and presented an account's session at the worst moment.
     [
-      "Sign in to confirm",
+      "Sign in to confirm your age",
       "This video is available to this channel's members"
     ]
   end

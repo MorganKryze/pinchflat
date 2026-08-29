@@ -4,6 +4,7 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   use Oban.Worker,
     queue: :media_fetching,
     priority: 5,
+    max_attempts: 5,
     unique: [period: :infinity, states: [:available, :scheduled, :retryable, :executing]],
     tags: ["media_item", "media_fetching", "show_in_dashboard"]
 
@@ -17,6 +18,26 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   alias Pinchflat.Downloading.MediaDownloader
 
   alias Pinchflat.Lifecycle.UserScripts.CommandRunner, as: UserScriptRunner
+
+  @doc """
+  Spreads the five attempts over roughly three hours rather than Oban's default twenty
+  minutes.
+
+  The failures worth retrying here clear on the scale of hours, not seconds: an IP
+  throttle from YouTube is the common one. Five attempts inside twenty minutes all land
+  in the same throttle window, so they all fail, and the only thing they achieve is more
+  requests against an IP that is already refusing us.
+
+  Jittered because a throttled source has hundreds of media items backing off in
+  lockstep, and they must not all come back at the same instant.
+
+  Returns integer() (seconds)
+  """
+  @impl Oban.Worker
+  def backoff(%Oban.Job{attempt: attempt}) do
+    # 30s, 8min, 40min, 2h - a little under three hours across the five attempts.
+    trunc(:math.pow(attempt, 4) * 30 * (0.9 + :rand.uniform() * 0.2))
+  end
 
   @doc """
   Starts the media_item media download worker and creates a task for the media_item.
@@ -129,9 +150,17 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   defp action_on_error(message) do
     # This will attempt re-download at the next indexing, but it won't be retried
     # immediately as part of job failure logic
+    #
+    # NOTE: "Sign in to confirm" is deliberately not matched as a prefix. It covers two
+    # opposite situations. "Sign in to confirm your age" needs the cookies of a verified
+    # account and will never succeed without them, so it belongs here. "Sign in to confirm
+    # you're not a bot" is an IP throttle that clears on its own within hours, and treating
+    # it as final is what leaves media items carrying an error with no job left to retry
+    # them: the worker returns {:ok, :non_retry}, so Oban records the job as a success and
+    # nothing ever reconsiders the item until the next index.
     non_retryable_errors = [
       "Video unavailable",
-      "Sign in to confirm",
+      "Sign in to confirm your age",
       "This video is available to this channel's members"
     ]
 

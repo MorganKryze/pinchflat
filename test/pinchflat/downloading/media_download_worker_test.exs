@@ -54,6 +54,14 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
       assert job.priority == 5
     end
 
+    test "is limited to five attempts", %{media_item: media_item} do
+      assert {:ok, _} = MediaDownloadWorker.kickoff_with_task(media_item)
+
+      [job] = all_enqueued(worker: MediaDownloadWorker, args: %{"id" => media_item.id})
+
+      assert job.max_attempts == 5
+    end
+
     test "priority can be set", %{media_item: media_item} do
       assert {:ok, _} = MediaDownloadWorker.kickoff_with_task(media_item, %{}, priority: 0)
 
@@ -134,10 +142,23 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
       end)
     end
 
-    test "does not set the job to retryable if youtube thinks you're a bot", %{media_item: media_item} do
+    test "sets the job to retryable if youtube thinks you're a bot", %{media_item: media_item} do
       expect(YtDlpRunnerMock, :run, 2, fn
         _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}
         _url, :download, _opts, _ot, _addl -> {:error, "Sign in to confirm you're not a bot", 1}
+      end)
+
+      Oban.Testing.with_testing_mode(:inline, fn ->
+        {:ok, job} = Oban.insert(MediaDownloadWorker.new(%{id: media_item.id, quality_upgrade?: true}))
+
+        assert job.state == "retryable"
+      end)
+    end
+
+    test "does not set the job to retryable if the video is age-restricted", %{media_item: media_item} do
+      expect(YtDlpRunnerMock, :run, 2, fn
+        _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}
+        _url, :download, _opts, _ot, _addl -> {:error, "Sign in to confirm your age", 1}
       end)
 
       Oban.Testing.with_testing_mode(:inline, fn ->
@@ -430,6 +451,17 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
       end)
 
       perform_job(MediaDownloadWorker, %{id: media_item.id})
+    end
+  end
+
+  describe "backoff/1" do
+    test "grows fast enough to outlast a throttle window" do
+      delays = Enum.map(1..4, fn attempt -> MediaDownloadWorker.backoff(%Oban.Job{attempt: attempt}) end)
+
+      # Strictly increasing despite the jitter, and the five attempts span hours
+      # rather than the twenty minutes Oban's default would give them.
+      assert delays == Enum.sort(delays)
+      assert Enum.sum(delays) > 2 * 60 * 60
     end
   end
 end
