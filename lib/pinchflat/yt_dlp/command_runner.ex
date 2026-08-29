@@ -26,6 +26,9 @@ defmodule Pinchflat.YtDlp.CommandRunner do
       attach a cookie file if the user hasn't set one up.
     - :skip_sleep_interval - if true, will not add the sleep interval options to the command.
       Usually only used for commands that would be UI-blocking
+    - :restrict_filenames - overrides the global setting for this one command. A media
+      profile can ask for ASCII-only filenames on its own sources without imposing it on
+      everyone else
 
   Returns {:ok, binary()} | {:error, output, status}.
   """
@@ -35,7 +38,7 @@ defmodule Pinchflat.YtDlp.CommandRunner do
 
     output_filepath = generate_output_filepath(addl_opts)
     print_to_file_opts = [{:print_to_file, output_template}, output_filepath]
-    user_configured_opts = cookie_file_options(addl_opts) ++ rate_limit_options(addl_opts) ++ misc_options()
+    user_configured_opts = cookie_file_options(addl_opts) ++ rate_limit_options(addl_opts) ++ misc_options(addl_opts)
     # These must stay in exactly this order, hence why I'm giving it its own variable.
     all_opts = command_opts ++ print_to_file_opts ++ user_configured_opts ++ global_options()
     formatted_command_opts = [url] ++ CliUtils.parse_options(all_opts)
@@ -153,8 +156,16 @@ defmodule Pinchflat.YtDlp.CommandRunner do
     end
   end
 
-  defp misc_options do
-    if Settings.get!(:restrict_filenames), do: [:restrict_filenames], else: []
+  # The caller wins when it has an opinion. Only the download path does: it is the one
+  # with a media profile in hand, and the only one whose filenames a person ever sees.
+  defp misc_options(addl_opts) do
+    restrict =
+      case Keyword.get(addl_opts, :restrict_filenames) do
+        nil -> Settings.get!(:restrict_filenames)
+        value -> value
+      end
+
+    if restrict, do: [:restrict_filenames], else: []
   end
 
   defp backend_executable do

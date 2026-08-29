@@ -26,6 +26,7 @@ defmodule Pinchflat.Profiles.MediaProfile do
     nfo_strip_collection_suffix
     nfo_strip_urls_from_description
     nfo_description_max_length
+    restrict_filenames_override
     sponsorblock_behaviour
     sponsorblock_categories
     shorts_behaviour
@@ -66,6 +67,16 @@ defmodule Pinchflat.Profiles.MediaProfile do
     field :nfo_strip_urls_from_description, :boolean, default: false
     # nil means no cap - a description is left exactly as YouTube gave it.
     field :nfo_description_max_length, :integer
+
+    # ASCII-only filenames, per profile. The global setting stays the default so a
+    # library that has already been named one way is not renamed by an update, and
+    # `inherit` is an explicit value rather than a nil, because "not set" and "set to
+    # match the global" want to be the same thing and a nullable boolean makes them
+    # look different.
+    field :restrict_filenames_override, Ecto.Enum,
+      values: ~w(inherit restrict allow)a,
+      default: :inherit
+
     field :sponsorblock_behaviour, Ecto.Enum, values: [:disabled, :mark, :remove], default: :disabled
     field :sponsorblock_categories, {:array, :string}, default: []
     # NOTE: these do NOT speed up indexing - the indexer still has to go

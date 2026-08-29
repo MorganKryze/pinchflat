@@ -6,6 +6,7 @@ defmodule Pinchflat.Downloading.MediaDownloaderTest do
   import Pinchflat.ProfilesFixtures
 
   alias Pinchflat.Media
+  alias Pinchflat.Settings
   alias Pinchflat.Downloading.MediaDownloader
 
   setup do
@@ -115,6 +116,59 @@ defmodule Pinchflat.Downloading.MediaDownloaderTest do
 
       refute media_item.last_error
       refute media_item.last_error_at
+    end
+  end
+
+  describe "download_for_media_item/3 when restricting filenames" do
+    defp restrict_flag_present?(media_item) do
+      test_pid = self()
+
+      expect(YtDlpRunnerMock, :run, 3, fn
+        _url, :get_downloadable_status, _opts, _ot, _addl ->
+          {:ok, "{}"}
+
+        _url, :download_thumbnail, _opts, _ot, _addl ->
+          {:ok, ""}
+
+        _url, :download, _opts, _ot, addl ->
+          send(test_pid, {:addl, addl})
+          {:ok, render_metadata(:media_metadata)}
+      end)
+
+      MediaDownloader.download_for_media_item(media_item)
+
+      assert_receive {:addl, addl}
+      Keyword.get(addl, :restrict_filenames)
+    end
+
+    test "says nothing when the profile has no opinion", %{media_item: media_item} do
+      # nil rather than false: "no opinion" has to leave the global setting in charge,
+      # and false would quietly override it.
+      assert restrict_flag_present?(media_item) == nil
+    end
+
+    test "asks for it when the profile does", %{media_item: media_item} do
+      media_item = with_override(media_item, :restrict)
+
+      assert restrict_flag_present?(media_item) == true
+    end
+
+    test "refuses it when the profile says so, whatever the global setting is", %{media_item: media_item} do
+      Settings.set(restrict_filenames: true)
+      media_item = with_override(media_item, :allow)
+
+      # The point of the whole change: one library keeps its accents while another does
+      # not, without either having to win globally.
+      assert restrict_flag_present?(media_item) == false
+    end
+
+    defp with_override(media_item, value) do
+      {:ok, _profile} =
+        Pinchflat.Profiles.update_media_profile(media_item.source.media_profile, %{
+          restrict_filenames_override: value
+        })
+
+      Repo.preload(Repo.reload(media_item), [:metadata, source: :media_profile], force: true)
     end
   end
 

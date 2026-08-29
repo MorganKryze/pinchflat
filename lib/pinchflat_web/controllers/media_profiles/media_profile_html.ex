@@ -35,6 +35,14 @@ defmodule PinchflatWeb.MediaProfiles.MediaProfileHTML do
     ]
   end
 
+  def friendly_restrict_filenames_options do
+    [
+      {"Use the global setting (default)", "inherit"},
+      {"Restrict to ASCII", "restrict"},
+      {"Allow any characters", "allow"}
+    ]
+  end
+
   def friendly_sponsorblock_options do
     [
       {"Disabled (default)", "disabled"},

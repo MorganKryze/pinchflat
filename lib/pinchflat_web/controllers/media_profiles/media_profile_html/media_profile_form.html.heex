@@ -95,6 +95,14 @@
       />
 
       <.input
+        field={f[:restrict_filenames_override]}
+        options={friendly_restrict_filenames_options()}
+        type="select"
+        label="Filename Characters"
+        help="Restricting filenames removes spaces and ampersands but also strips accents - 'bêtisier' becomes 'betisier' - which cannot be undone from the name alone. Per profile, so one library can keep accents while another does not. Leave on the global setting unless a profile needs to differ"
+      />
+
+      <.input
         field={f[:nfo_strip_uploader_from_title]}
         type="toggle"
         label="Strip Channel Name From Episode Titles"

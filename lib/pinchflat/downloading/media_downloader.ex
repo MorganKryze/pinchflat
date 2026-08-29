@@ -168,7 +168,11 @@ defmodule Pinchflat.Downloading.MediaDownloader do
     source_uses_cookies = Sources.use_cookies?(item_with_preloads.source, :downloading)
     should_use_cookies = force_use_cookies || source_uses_cookies
 
-    runner_opts = [output_filepath: output_filepath, use_cookies: should_use_cookies]
+    runner_opts = [
+      output_filepath: output_filepath,
+      use_cookies: should_use_cookies,
+      restrict_filenames: restrict_filenames?(item_with_preloads.source.media_profile)
+    ]
 
     case {YtDlpMedia.get_downloadable_status(url, use_cookies: should_use_cookies), should_use_cookies} do
       {{:ok, :downloadable}, _} ->
@@ -191,6 +195,13 @@ defmodule Pinchflat.Downloading.MediaDownloader do
         err
     end
   end
+
+  # nil means "no opinion", which leaves the global setting in charge. Restricting
+  # filenames strips accents as well as spaces, and that is not reversible from the name
+  # alone, so a profile has to say so deliberately rather than inherit it by accident.
+  defp restrict_filenames?(%{restrict_filenames_override: :restrict}), do: true
+  defp restrict_filenames?(%{restrict_filenames_override: :allow}), do: false
+  defp restrict_filenames?(_media_profile), do: nil
 
   defp maybe_retry_with_cookies(url, item_with_preloads, output_filepath, override_opts, err) do
     {:error, message, _} = err
