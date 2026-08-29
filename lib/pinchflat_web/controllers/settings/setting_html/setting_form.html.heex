@@ -74,6 +74,13 @@
       />
 
       <.input
+        field={f[:set_aside_permanent_failures]}
+        type="toggle"
+        label="Set Aside Permanent Failures"
+        help="Take a media item out of rotation when it fails for a reason that can never succeed - deleted, private, members-only, age-restricted - instead of retrying it at every index forever. The reason is recorded and the item can be re-enabled by hand. Off by default, since a video can be un-privated and an age restriction can be lifted"
+      />
+
+      <.input
         field={f[:download_backoff_enabled]}
         type="toggle"
         label="Pause When Throttled"

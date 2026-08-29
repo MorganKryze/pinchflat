@@ -26,6 +26,7 @@ defmodule Pinchflat.Settings.Setting do
     :download_backoff_threshold,
     :download_backoff_minutes,
     :download_backoff_paused_until,
+    :set_aside_permanent_failures,
     :restrict_filenames
   ]
 
@@ -78,6 +79,11 @@ defmodule Pinchflat.Settings.Setting do
     # State rather than preference, kept in the open so "why is nothing downloading" has
     # an answer with a time on it instead of living inside a process.
     field :download_backoff_paused_until, :utc_datetime
+
+    # Whether a failure that can never succeed takes the media item out of rotation for
+    # good. Off by default: upstream reconsiders these at every index, which is a
+    # defensible choice, since a video can be un-privated and an age restriction lifted.
+    field :set_aside_permanent_failures, :boolean, default: false
 
     field :video_codec_preference, :string
     field :audio_codec_preference, :string

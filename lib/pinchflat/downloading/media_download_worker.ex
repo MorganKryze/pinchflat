@@ -157,7 +157,7 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
         {:ok, :non_retry}
 
       {:error, _error_atom, message} ->
-        action_on_error(message)
+        action_on_error(media_item, message)
     end
   end
 
@@ -171,17 +171,31 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   defp get_redownloaded_at(true), do: DateTime.utc_now()
   defp get_redownloaded_at(_), do: nil
 
-  defp action_on_error(message) do
-    # This will attempt re-download at the next indexing, but it won't be retried
-    # immediately as part of job failure logic
+  defp action_on_error(media_item, message) do
     if DownloadErrors.retryable?(message) do
       maybe_back_off(message)
 
       {:error, :download_failed}
     else
       Logger.error("yt-dlp download will not be retried: #{inspect(message)}")
+      maybe_set_aside(media_item, message)
 
       {:ok, :non_retry}
+    end
+  end
+
+  # A deleted video, a private one, one behind an age gate: upstream tries each of these
+  # again at every index, forever, and clearing them is a click per media item. Enabling
+  # this takes them out of rotation on the failure itself, with the reason recorded, so
+  # the backlog empties itself rather than needing a button.
+  #
+  # Off by default, and reasonably so: a video can be un-privated and an age restriction
+  # can be lifted, so "never look again" is a real choice and not obviously the right one.
+  defp maybe_set_aside(media_item, message) do
+    if Settings.get!(:set_aside_permanent_failures) do
+      reason = DownloadErrors.label(message) || "Permanent download failure"
+
+      Media.update_media_item(media_item, %{prevent_download: true, blocked_reason: reason})
     end
   end
 

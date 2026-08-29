@@ -206,6 +206,52 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
       refute Settings.get!(:download_backoff_paused_until)
     end
 
+    test "leaves a permanently failed item in rotation by default", %{media_item: media_item} do
+      expect(YtDlpRunnerMock, :run, 2, fn
+        _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}
+        _url, :download, _opts, _ot, _addl -> {:error, "Sign in to confirm your age", 1}
+      end)
+
+      perform_job(MediaDownloadWorker, %{id: media_item.id, quality_upgrade?: true})
+
+      # Upstream's behaviour: reconsidered at every index. An age restriction can be
+      # lifted, so never looking again is a choice rather than an obvious improvement.
+      refute Media.get_media_item!(media_item.id).prevent_download
+    end
+
+    test "can take a permanently failed item out of rotation", %{media_item: media_item} do
+      Settings.set(set_aside_permanent_failures: true)
+
+      expect(YtDlpRunnerMock, :run, 2, fn
+        _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}
+        _url, :download, _opts, _ot, _addl -> {:error, "Sign in to confirm your age", 1}
+      end)
+
+      perform_job(MediaDownloadWorker, %{id: media_item.id, quality_upgrade?: true})
+
+      media_item = Media.get_media_item!(media_item.id)
+
+      assert media_item.prevent_download
+      # With the reason, always. Setting something aside silently is the defect this
+      # fork spent several commits removing.
+      assert media_item.blocked_reason == "Age restricted"
+    end
+
+    test "never takes aside something that could still succeed", %{media_item: media_item} do
+      Settings.set(set_aside_permanent_failures: true)
+
+      expect(YtDlpRunnerMock, :run, 2, fn
+        _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}
+        _url, :download, _opts, _ot, _addl -> {:error, "Sign in to confirm you're not a bot", 1}
+      end)
+
+      perform_job(MediaDownloadWorker, %{id: media_item.id, quality_upgrade?: true})
+
+      # A throttle clears on its own. Setting it aside would turn a temporary block into
+      # a permanent gap in the library, which is the original bug wearing a new hat.
+      refute Media.get_media_item!(media_item.id).prevent_download
+    end
+
     test "does not set the job to retryable if the video is age-restricted", %{media_item: media_item} do
       expect(YtDlpRunnerMock, :run, 2, fn
         _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}
