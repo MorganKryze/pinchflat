@@ -10,6 +10,8 @@ defmodule Pinchflat.Settings.Setting do
     :onboarding,
     :pro_enabled,
     :yt_dlp_version,
+    :yt_dlp_last_update_attempted_at,
+    :yt_dlp_last_update_error,
     :apprise_version,
     :apprise_server,
     :video_codec_preference,
@@ -32,6 +34,9 @@ defmodule Pinchflat.Settings.Setting do
     field :onboarding, :boolean, default: true
     field :pro_enabled, :boolean, default: false
     field :yt_dlp_version, :string
+    field :yt_dlp_last_update_attempted_at, :utc_datetime
+    # nil means the last attempt succeeded
+    field :yt_dlp_last_update_error, :string
     field :apprise_version, :string
     field :apprise_server, :string
     field :youtube_api_key, :string

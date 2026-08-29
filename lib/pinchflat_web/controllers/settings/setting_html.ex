@@ -28,10 +28,22 @@ defmodule PinchflatWeb.Settings.SettingHTML do
     """
     - App Version: #{Application.spec(:pinchflat)[:vsn]}
     - yt-dlp Version: #{Settings.get!(:yt_dlp_version)}
+    - yt-dlp Last Update: #{yt_dlp_update_summary()}
     - Apprise Version: #{Settings.get!(:apprise_version)}
     - System Architecture: #{to_string(:erlang.system_info(:system_architecture))}
     - Timezone: #{Application.get_env(:pinchflat, :timezone)}
     """
+  end
+
+  # The version alone does not say whether it is the version yt-dlp should be on: a
+  # self-update that has been failing for months looks identical to one that has nothing
+  # to do.
+  defp yt_dlp_update_summary do
+    case {Settings.get!(:yt_dlp_last_update_attempted_at), Settings.get!(:yt_dlp_last_update_error)} do
+      {nil, _} -> "never attempted"
+      {attempted_at, nil} -> "ok (#{attempted_at})"
+      {attempted_at, error} -> "FAILED (#{attempted_at}): #{error}"
+    end
   end
 
   defp help_link_classes do
