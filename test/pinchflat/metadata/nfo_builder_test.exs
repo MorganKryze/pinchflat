@@ -31,6 +31,26 @@ defmodule Pinchflat.Metadata.NfoBuilderTest do
       assert String.contains?(nfo, "<title>#{metadata["title"]}</title>")
     end
 
+    test "produces well-formed XML", %{metadata: metadata, filepath: filepath} do
+      result = NfoBuilder.build_and_store_for_media_item(filepath, metadata)
+
+      # Every other assertion here is a String.contains?, which cannot see anything the
+      # template emits that it should not. Parsing the whole file can, and a media centre
+      # reading a malformed NFO is the case nobody notices until dates or titles quietly
+      # stop appearing.
+      assert {_parsed, []} = :xmerl_scan.string(String.to_charlist(File.read!(result)))
+    end
+
+    test "renders the aired date as a plain date", %{metadata: metadata, filepath: filepath} do
+      result = NfoBuilder.build_and_store_for_media_item(filepath, metadata)
+      nfo = File.read!(result)
+
+      # Not a datetime: Jellyfin parses this field in the exact format its
+      # ReleaseDateFormat setting names, `yyyy-MM-dd` by default, and anything else
+      # leaves the episode with no air date at all.
+      assert String.contains?(nfo, "<aired>2021-07-20</aired>")
+    end
+
     test "escapes invalid characters", %{filepath: filepath} do
       metadata = %{
         "title" => "hello' & <world>",
@@ -97,6 +117,12 @@ defmodule Pinchflat.Metadata.NfoBuilderTest do
 
       assert String.contains?(nfo, ~S(<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>))
       assert String.contains?(nfo, "<title>#{metadata["title"]}</title>")
+    end
+
+    test "produces well-formed XML", %{metadata: metadata, filepath: filepath} do
+      result = NfoBuilder.build_and_store_for_source(filepath, metadata)
+
+      assert {_parsed, []} = :xmerl_scan.string(String.to_charlist(File.read!(result)))
     end
 
     test "escapes invalid characters", %{filepath: filepath} do

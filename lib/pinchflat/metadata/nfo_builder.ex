@@ -46,6 +46,13 @@ defmodule Pinchflat.Metadata.NfoBuilder do
     {season, episode} = determine_season_and_episode_number(nfo_filepath, upload_date)
 
     # Cribbed from a combination of the Kodi wiki, ytdl-nfo, and ytdl-sub.
+    #
+    # NOTE: <aired> is a date, not a datetime. Jellyfin matches this field against its
+    # ReleaseDateFormat setting - `yyyy-MM-dd` by default, and an exact match at that - so
+    # a datetime parses as no date at all and the episode silently loses its air date.
+    # Everything else in the file is unaffected, which is what makes it hard to spot.
+    # `upload_date` stays a DateTime because determine_season_and_episode_number/2 reads
+    # its .year below.
     """
     <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
     <episodedetails>
@@ -53,7 +60,7 @@ defmodule Pinchflat.Metadata.NfoBuilder do
       <showtitle>#{safe(metadata["uploader"])}</showtitle>
       <uniqueid type="youtube" default="true">#{safe(metadata["id"])}</uniqueid>
       <plot>#{safe(metadata["description"])}</plot>
-      <aired>#{safe(upload_date)}</aired>
+      <aired>#{safe(DateTime.to_date(upload_date))}</aired>
       <season>#{safe(season)}</season>
       <episode>#{episode}</episode>
       <genre>YouTube</genre>
