@@ -102,6 +102,21 @@
       />
 
       <.input
+        field={f[:nfo_strip_urls_from_description]}
+        type="toggle"
+        label="Strip Links From Descriptions"
+        help="Removes URLs from the episode summary while keeping the sentences they sat in - 'Out on DVD March 7th! (pre-order here <link>)' keeps everything but the link. A line is only dropped once removing the URL leaves nothing but punctuation"
+      />
+
+      <.input
+        field={f[:nfo_description_max_length]}
+        placeholder="Leave blank for no limit"
+        type="number"
+        label="Description Length Limit"
+        help="Caps the episode summary at this many characters, cutting at a word boundary. Leave blank to write the description exactly as YouTube gave it"
+      />
+
+      <.input
         field={f[:nfo_strip_collection_suffix]}
         type="toggle"
         label="Strip Tab Name From Series Title"

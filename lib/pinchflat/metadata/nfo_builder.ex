@@ -6,6 +6,7 @@ defmodule Pinchflat.Metadata.NfoBuilder do
 
   import Pinchflat.Utils.XmlUtils, only: [safe: 1]
 
+  alias Pinchflat.Utils.StringUtils
   alias Pinchflat.Utils.FilesystemUtils
   alias Pinchflat.Metadata.MetadataFileHelpers
 
@@ -66,7 +67,7 @@ defmodule Pinchflat.Metadata.NfoBuilder do
       <title>#{safe(episode_title(metadata, media_profile))}</title>
       <showtitle>#{safe(metadata["uploader"])}</showtitle>
       <uniqueid type="youtube" default="true">#{safe(metadata["id"])}</uniqueid>
-      <plot>#{safe(metadata["description"])}</plot>
+      <plot>#{safe(plot(metadata, media_profile))}</plot>
       <aired>#{safe(DateTime.to_date(upload_date))}</aired>
       <season>#{safe(season)}</season>
       <episode>#{episode}</episode>
@@ -80,12 +81,30 @@ defmodule Pinchflat.Metadata.NfoBuilder do
     <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
     <tvshow>
       <title>#{safe(show_title(metadata, media_profile))}</title>
-      <plot>#{safe(metadata["description"])}</plot>
+      <plot>#{safe(plot(metadata, media_profile))}</plot>
       <uniqueid type="youtube" default="true">#{safe(metadata["id"])}</uniqueid>
       <genre>YouTube</genre>
     </tvshow>
     """
   end
+
+  # A YouTube description is mostly links, subscription pleas and pointers to other
+  # videos, and a media centre shows it as the episode summary. Both steps are optional
+  # and neither rewrites anything: URLs come out, the sentences around them stay, and the
+  # cap is a cap rather than a rewrite.
+  defp plot(metadata, %{} = media_profile) do
+    metadata["description"]
+    |> maybe_strip_urls(Map.get(media_profile, :nfo_strip_urls_from_description))
+    |> maybe_truncate(Map.get(media_profile, :nfo_description_max_length))
+  end
+
+  defp plot(metadata, _media_profile), do: metadata["description"]
+
+  defp maybe_strip_urls(description, true), do: StringUtils.strip_urls(description)
+  defp maybe_strip_urls(description, _), do: description
+
+  defp maybe_truncate(description, max) when is_integer(max), do: StringUtils.truncate(description, max)
+  defp maybe_truncate(description, _max), do: description
 
   # In a media centre the channel is already the name of the series, so a title that
   # repeats it spends the width twice. The uploader is still in <showtitle>, so nothing

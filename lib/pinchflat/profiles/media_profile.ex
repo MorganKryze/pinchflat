@@ -24,6 +24,8 @@ defmodule Pinchflat.Profiles.MediaProfile do
     download_nfo
     nfo_strip_uploader_from_title
     nfo_strip_collection_suffix
+    nfo_strip_urls_from_description
+    nfo_description_max_length
     sponsorblock_behaviour
     sponsorblock_categories
     shorts_behaviour
@@ -61,6 +63,9 @@ defmodule Pinchflat.Profiles.MediaProfile do
     # whatever YouTube called it: the interface should show what is really there.
     field :nfo_strip_uploader_from_title, :boolean, default: false
     field :nfo_strip_collection_suffix, :boolean, default: false
+    field :nfo_strip_urls_from_description, :boolean, default: false
+    # nil means no cap - a description is left exactly as YouTube gave it.
+    field :nfo_description_max_length, :integer
     field :sponsorblock_behaviour, Ecto.Enum, values: [:disabled, :mark, :remove], default: :disabled
     field :sponsorblock_categories, {:array, :string}, default: []
     # NOTE: these do NOT speed up indexing - the indexer still has to go
@@ -91,6 +96,7 @@ defmodule Pinchflat.Profiles.MediaProfile do
     # Ensures it ends with `.{{ ext }}` or `.%(ext)s` or similar (with a little wiggle room)
     |> validate_format(:output_path_template, ext_regex(), message: "must end with .{{ ext }}")
     |> validate_number(:redownload_delay_days, greater_than_or_equal_to: 0)
+    |> validate_number(:nfo_description_max_length, greater_than_or_equal_to: 1)
     |> unique_constraint(:name)
   end
 

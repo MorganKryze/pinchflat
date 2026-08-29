@@ -188,6 +188,46 @@ defmodule Pinchflat.Metadata.NfoBuilderTest do
     end
   end
 
+  describe "build_and_store_for_media_item/3 when tidying the description" do
+    defp plot_for(filepath, profile, description) do
+      metadata = %{
+        "title" => "t",
+        "uploader" => "u",
+        "id" => "id",
+        "description" => description,
+        "upload_date" => "20210720"
+      }
+
+      filepath
+      |> NfoBuilder.build_and_store_for_media_item(metadata, profile)
+      |> File.read!()
+      |> then(&Regex.run(~r{<plot>(.*)</plot>}s, &1))
+      |> Enum.at(1)
+    end
+
+    test "keeps the sentence an URL was buried in", %{filepath: filepath} do
+      profile = %{nfo_strip_urls_from_description: true, nfo_description_max_length: nil}
+
+      plot = plot_for(filepath, profile, "Out on DVD March 7th! (pre-order here https://example.com/dvd)")
+
+      assert plot =~ "Out on DVD March 7th!"
+      refute plot =~ "example.com"
+    end
+
+    test "caps the length at a word boundary", %{filepath: filepath} do
+      profile = %{nfo_strip_urls_from_description: false, nfo_description_max_length: 12}
+
+      assert plot_for(filepath, profile, "the quick brown fox jumps") == "the quick…"
+    end
+
+    test "writes it verbatim when neither option is set", %{filepath: filepath} do
+      profile = %{nfo_strip_urls_from_description: false, nfo_description_max_length: nil}
+      description = "Subscribe at https://example.com for more"
+
+      assert plot_for(filepath, profile, description) == description
+    end
+  end
+
   describe "build_and_store_for_source/2" do
     test "returns the filepath", %{metadata: metadata, filepath: filepath} do
       result = NfoBuilder.build_and_store_for_source(filepath, metadata)
