@@ -4,23 +4,10 @@ on:
   push:
     branches:
       - master
-    # Every path the job below reads. A fork rebases on upstream regularly and
-    # most of those rebases touch nothing this job can judge; without a filter
-    # each one pays for a full image build plus the suite.
-    paths:
-      - 'lib/**'
-      - 'test/**'
-      - 'config/**'
-      - 'priv/**'
-      - 'assets/**'
-      - 'tooling/**'
-      - 'docker/**'
-      - 'mix.exs'
-      - 'mix.lock'
-      - 'docker-compose.ci.yml'
-      - '.github/workflows/lint_and_test.yml'
-  # No paths filter here on purpose: this is a required check, and a required
-  # check that never runs leaves a docs-only pull request waiting forever.
+  # No paths filter anywhere in this workflow, on purpose. `mix check` runs prettier
+  # over the whole repository - markdown, JSON, YAML, CSS - so any file can fail it,
+  # and the only honest list of "every path this job reads" is every path. A shorter
+  # one lets a README land unchecked, which is exactly what happened once.
   pull_request:
     branches:
       - master
