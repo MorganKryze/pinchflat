@@ -69,7 +69,10 @@ Tagged releases are signed and carry `stable`, `latest` and their version number
 `master` by hand carry `dev` and a commit sha and go unsigned, since they are whatever `master` is
 that minute.
 
-Verify a release before running it:
+Verify a release before running it. **Use cosign 3.0 or newer.** Releases are signed with
+cosign 3, which stores a signature as an OCI referrer; cosign 2 looks for a `.sig` tag
+instead, finds nothing, and says `no signatures found`, which reads like tampering rather
+than like the version mismatch it is.
 
 ```bash
 cosign verify ghcr.io/morgankryze/pinchflat:stable \
