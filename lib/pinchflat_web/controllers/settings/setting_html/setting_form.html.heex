@@ -111,6 +111,13 @@
       />
 
       <.input
+        field={f[:download_backoff_probe_enabled]}
+        type="toggle"
+        label="Ask Before Resuming"
+        help="When the pause is up, ask YouTube one question before starting the queues again, and keep waiting if the answer is still a refusal. Costs one request every pause instead of another threshold's worth of refused downloads. Off by default, since a plain pause ends on the clock and decides nothing"
+      />
+
+      <.input
         field={f[:forced_download_priority]}
         placeholder="5"
         type="number"

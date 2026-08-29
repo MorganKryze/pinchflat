@@ -87,10 +87,13 @@
     <div>
       <dt class="text-sm">yt-dlp queues</dt>
       <dd class="text-white font-medium">
-        <%= if @health.queues_paused_until do %>
-          paused until <.datetime_in_zone datetime={@health.queues_paused_until} format="%H:%M" />
-        <% else %>
-          running
+        <%= cond do %>
+          <% @health.queues_paused_until && @health.backoff_probe_enabled -> %>
+            paused, asking again at <.datetime_in_zone datetime={@health.queues_paused_until} format="%H:%M" />
+          <% @health.queues_paused_until -> %>
+            paused until <.datetime_in_zone datetime={@health.queues_paused_until} format="%H:%M" />
+          <% true -> %>
+            running
         <% end %>
       </dd>
     </div>

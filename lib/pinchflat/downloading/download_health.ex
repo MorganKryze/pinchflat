@@ -58,6 +58,8 @@ defmodule Pinchflat.Downloading.DownloadHealth do
       # nil unless the yt-dlp queues are currently stopped. The one field here that says
       # "nothing is downloading and that is on purpose".
       queues_paused_until: Settings.get!(:download_backoff_paused_until),
+      # Whether that pause ends on the clock or on an answer.
+      backoff_probe_enabled: Settings.get!(:download_backoff_probe_enabled),
       # The other reason nothing is downloading, and the one no amount of waiting fixes.
       indexing_paused: Switches.paused?(:indexing),
       downloading_paused: Switches.paused?(:downloading)

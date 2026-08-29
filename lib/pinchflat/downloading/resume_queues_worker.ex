@@ -1,14 +1,24 @@
 defmodule Pinchflat.Downloading.ResumeQueuesWorker do
-  @moduledoc false
+  @moduledoc """
+  Ends a backoff pause, either because the time is up or because YouTube answered.
+  """
 
   use Oban.Worker,
     queue: :local_data,
     # One pending resume at a time. Without this every throttled download during a pause
     # would schedule another, and the queues would resume on whichever fired first.
-    unique: [period: :infinity, states: [:available, :scheduled, :executing]],
+    #
+    # `:executing` is deliberately not here. This worker schedules its own successor when a
+    # probe says the block is still on, and counting itself as a duplicate would make that
+    # insert a silent no-op - leaving the queues stopped with nothing left to start them.
+    unique: [period: :infinity, states: [:available, :scheduled]],
     tags: ["local_data"]
 
+  require Logger
+
   alias __MODULE__
+  alias Pinchflat.Settings
+  alias Pinchflat.YoutubeStatus.Probe
   alias Pinchflat.Downloading.DownloadBackoff
 
   @doc """
@@ -26,6 +36,33 @@ defmodule Pinchflat.Downloading.ResumeQueuesWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    DownloadBackoff.resume()
+    if Settings.get!(:download_backoff_probe_enabled) do
+      resume_if_answered()
+    else
+      DownloadBackoff.resume()
+    end
+  end
+
+  # Resuming blind means the first thing that happens after a block that has not cleared is
+  # another threshold's worth of refusals. Asking once costs one request and answers it.
+  #
+  # Anything other than a refusal resumes, including having nothing to ask about. Staying
+  # stopped because the library is empty, or because the one video the probe picked was
+  # deleted, is worse than resuming into a block that will simply pause again.
+  defp resume_if_answered do
+    case Probe.run() do
+      :ok ->
+        Logger.info("YouTube answered: lifting the backoff early")
+        DownloadBackoff.resume()
+
+      :no_target ->
+        DownloadBackoff.resume()
+
+      {:error, message} ->
+        Logger.warning("Probe was refused, staying paused: #{String.slice(message, 0, 200)}")
+        DownloadBackoff.extend()
+
+        :ok
+    end
   end
 end

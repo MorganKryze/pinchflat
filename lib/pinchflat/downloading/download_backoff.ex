@@ -68,6 +68,21 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
   end
 
   @doc """
+  Keeps the queues stopped for another window.
+
+  Used when a probe says YouTube is still refusing. Re-applies the pause rather than only
+  moving the date, because a restart clears Oban's pauses while the scheduled resume
+  survives - so this can run against queues that came back up.
+
+  Returns {:paused, %DateTime{}}
+  """
+  def extend do
+    Logger.warning("Still being refused: keeping the yt-dlp queues stopped")
+
+    pause()
+  end
+
+  @doc """
   When the current pause ends, or nil if there is not one.
 
   Returns %DateTime{} | nil

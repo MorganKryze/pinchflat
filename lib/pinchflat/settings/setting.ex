@@ -26,6 +26,7 @@ defmodule Pinchflat.Settings.Setting do
     :download_backoff_threshold,
     :download_backoff_minutes,
     :download_backoff_paused_until,
+    :download_backoff_probe_enabled,
     :indexing_paused,
     :downloading_paused,
     :set_aside_permanent_failures,
@@ -82,6 +83,9 @@ defmodule Pinchflat.Settings.Setting do
     # State rather than preference, kept in the open so "why is nothing downloading" has
     # an answer with a time on it instead of living inside a process.
     field :download_backoff_paused_until, :utc_datetime
+    # Whether the pause ends on an answer rather than on the clock. Off by default: a
+    # fixed pause decides nothing, this one keeps deciding until YouTube agrees.
+    field :download_backoff_probe_enabled, :boolean, default: false
 
     # Stopping the queues by hand. Off by default, and separate from the backoff above:
     # that one is a reaction and lifts itself, these are a decision and stay until you
