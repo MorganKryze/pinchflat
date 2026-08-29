@@ -27,12 +27,17 @@ RUN apt-get update -y && \
     # Hex and Rebar
     mix local.hex --force && \
     mix local.rebar --force && \
-    # FFmpeg (latest build that doesn't cause an illegal instruction error for some users - see #347)
+    # FFmpeg, from the `latest` release rather than a dated autobuild. yt-dlp/FFmpeg-Builds
+    # prunes old autobuilds, so the pin that used to be here 404s and this image stopped
+    # building entirely. `latest` carries stable asset names that do not rot, and it is
+    # what dev.Dockerfile has been reading all along.
     export FFMPEG_DOWNLOAD=$(case ${TARGETPLATFORM:-linux/amd64} in \
-    "linux/amd64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/autobuild-2024-07-30-14-10/ffmpeg-N-116468-g0e09f6d690-linux64-gpl.tar.xz"   ;; \
-    "linux/arm64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/autobuild-2024-07-30-14-10/ffmpeg-N-116468-g0e09f6d690-linuxarm64-gpl.tar.xz" ;; \
+    "linux/amd64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"   ;; \
+    "linux/arm64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz" ;; \
     *)               echo ""        ;; esac) && \
-    curl -L ${FFMPEG_DOWNLOAD} --output /tmp/ffmpeg.tar.xz && \
+    # -f so a 404 fails here. Without it curl writes the error page to the file and exits
+    # 0, and the build dies further down in tar with a message about a corrupt archive.
+    curl -fL ${FFMPEG_DOWNLOAD} --output /tmp/ffmpeg.tar.xz && \
     tar -xf /tmp/ffmpeg.tar.xz --strip-components=2 --no-anchored -C /usr/local/bin/ "ffmpeg" && \
     tar -xf /tmp/ffmpeg.tar.xz --strip-components=2 --no-anchored -C /usr/local/bin/ "ffprobe" && \
     # Cleanup
@@ -109,7 +114,9 @@ RUN apt-get update -y && \
     "linux/amd64")   echo "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"   ;; \
     "linux/arm64")   echo "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64" ;; \
     *)               echo "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"        ;; esac) && \
-    curl -L ${YT_DLP_DOWNLOAD} -o /usr/local/bin/yt-dlp && \
+    # -f for the same reason as ffmpeg above: without it a 404 page is written here,
+    # made executable, and every yt-dlp call in the running container fails obscurely.
+    curl -fL ${YT_DLP_DOWNLOAD} -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp && \
     yt-dlp -U && \
     # Set the locale
