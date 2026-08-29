@@ -71,6 +71,19 @@ defmodule PinchflatWeb.Router do
     get "/healthcheck", HealthController, :check, log: false
   end
 
+  # Read-only JSON for scripts. Everything here was previously reachable only by scraping
+  # a CSRF token out of the HTML, and /sources could not be listed at all: it is a
+  # LiveView that pages ten at a time over a websocket, so enumerating sources meant
+  # walking ids until enough 404s came back.
+  scope "/api/v1", PinchflatWeb.Api do
+    pipe_through [:api, :token_protected_route]
+
+    get "/sources", ApiController, :sources
+    get "/sources/:id", ApiController, :source
+    get "/sources/:source_id/media", ApiController, :source_media
+    get "/media/:id", ApiController, :media_item
+  end
+
   # The detailed version does need protecting - it reports counts, error text and how far
   # behind the library is. Token rather than basic auth so a monitoring probe can reach it
   # with a query string, which is the same trade the OPML feed already makes.
