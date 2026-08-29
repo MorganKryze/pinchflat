@@ -106,7 +106,7 @@ defmodule Pinchflat.Metadata.SourceMetadataStorageWorker do
     if source.media_profile.download_nfo && series_directory do
       nfo_filepath = Path.join(series_directory, "tvshow.nfo")
 
-      NfoBuilder.build_and_store_for_source(nfo_filepath, metadata)
+      NfoBuilder.build_and_store_for_source(nfo_filepath, metadata, source.media_profile)
     end
   end
 

@@ -22,6 +22,8 @@ defmodule Pinchflat.Profiles.MediaProfile do
     download_metadata
     embed_metadata
     download_nfo
+    nfo_strip_uploader_from_title
+    nfo_strip_collection_suffix
     sponsorblock_behaviour
     sponsorblock_categories
     shorts_behaviour
@@ -55,6 +57,10 @@ defmodule Pinchflat.Profiles.MediaProfile do
     field :embed_metadata, :boolean, default: false
 
     field :download_nfo, :boolean, default: false
+    # Both only affect what is written into the NFO. The title Pinchflat shows stays
+    # whatever YouTube called it: the interface should show what is really there.
+    field :nfo_strip_uploader_from_title, :boolean, default: false
+    field :nfo_strip_collection_suffix, :boolean, default: false
     field :sponsorblock_behaviour, Ecto.Enum, values: [:disabled, :mark, :remove], default: :disabled
     field :sponsorblock_categories, {:array, :string}, default: []
     # NOTE: these do NOT speed up indexing - the indexer still has to go

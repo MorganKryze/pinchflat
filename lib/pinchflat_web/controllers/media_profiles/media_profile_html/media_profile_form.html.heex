@@ -93,6 +93,20 @@
         help="Downloads subtitle files alongside media file"
         x-init="$watch('selectedPreset', p => p && (enabled = presets[p]))"
       />
+
+      <.input
+        field={f[:nfo_strip_uploader_from_title]}
+        type="toggle"
+        label="Strip Channel Name From Episode Titles"
+        help="In a media centre the channel is already the name of the series, so an episode title that repeats it spends the width twice. Only removes it as a leading or trailing part, never mid-title, and never leaves a title empty. Affects the NFO only - Pinchflat still shows whatever YouTube called it"
+      />
+
+      <.input
+        field={f[:nfo_strip_collection_suffix]}
+        type="toggle"
+        label="Strip Tab Name From Series Title"
+        help="A source declared on a channel's /videos tab is reported as 'Whatever - Videos', and that suffix is the tab rather than part of the name. Only removes yt-dlp's own tab names, so a channel actually called 'Golden Moustache (M6)' is untouched"
+      />
     </section>
 
     <section x-data="{ presets: { default: true, media_center: true, audio: false, archiving: true } }">
