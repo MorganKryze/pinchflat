@@ -30,6 +30,12 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
 
   What it costs is recovery time. A block that clears just after a probe waits out the
   whole of the next pause, which at the ceiling is four times the base.
+
+  A restart puts the count back to zero along with the stale pause, so the first pause
+  after a reboot is one base again. That is deliberate - a count carried across a restart
+  would eventually be applied to a block that has nothing to do with the one that raised
+  it - and it is worth knowing before restarting a container mid-block to watch what the
+  escalation does.
   """
 
   require Logger
