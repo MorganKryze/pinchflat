@@ -19,6 +19,8 @@ defmodule Pinchflat.Settings.Setting do
     :youtube_api_key,
     :extractor_sleep_interval_seconds,
     :download_throughput_limit,
+    :download_max_attempts,
+    :download_retry_backoff_base_seconds,
     :restrict_filenames
   ]
 
@@ -27,7 +29,9 @@ defmodule Pinchflat.Settings.Setting do
     :pro_enabled,
     :video_codec_preference,
     :audio_codec_preference,
-    :extractor_sleep_interval_seconds
+    :extractor_sleep_interval_seconds,
+    :download_max_attempts,
+    :download_retry_backoff_base_seconds
   ]
 
   schema "settings" do
@@ -46,6 +50,11 @@ defmodule Pinchflat.Settings.Setting do
     field :download_throughput_limit, :string
     field :restrict_filenames, :boolean, default: false
 
+    # How hard to keep trying a download that failed. Read when the job runs, not when it
+    # is compiled, so a change takes effect on the next attempt without a restart.
+    field :download_max_attempts, :integer, default: 5
+    field :download_retry_backoff_base_seconds, :integer, default: 30
+
     field :video_codec_preference, :string
     field :audio_codec_preference, :string
   end
@@ -56,5 +65,9 @@ defmodule Pinchflat.Settings.Setting do
     |> cast(attrs, @allowed_fields)
     |> validate_required(@required_fields)
     |> validate_number(:extractor_sleep_interval_seconds, greater_than_or_equal_to: 0)
+    # 1 means "try once and stop", which is a legitimate choice. 0 would mean Oban never
+    # runs the job at all, which is not a setting anyone wants by accident.
+    |> validate_number(:download_max_attempts, greater_than_or_equal_to: 1, less_than_or_equal_to: 20)
+    |> validate_number(:download_retry_backoff_base_seconds, greater_than_or_equal_to: 1)
   end
 end

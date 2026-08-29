@@ -4,7 +4,6 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   use Oban.Worker,
     queue: :media_fetching,
     priority: 5,
-    max_attempts: 5,
     unique: [period: :infinity, states: [:available, :scheduled, :retryable, :executing]],
     tags: ["media_item", "media_fetching", "show_in_dashboard"]
 
@@ -13,6 +12,7 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   alias __MODULE__
   alias Pinchflat.Tasks
   alias Pinchflat.Repo
+  alias Pinchflat.Settings
   alias Pinchflat.Media
   alias Pinchflat.Media.FileSyncing
   alias Pinchflat.Downloading.MediaDownloader
@@ -20,23 +20,27 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   alias Pinchflat.Lifecycle.UserScripts.CommandRunner, as: UserScriptRunner
 
   @doc """
-  Spreads the five attempts over roughly three hours rather than Oban's default twenty
-  minutes.
+  Spreads the retries over hours rather than Oban's default of about twenty minutes.
 
   The failures worth retrying here clear on the scale of hours, not seconds: an IP
-  throttle from YouTube is the common one. Five attempts inside twenty minutes all land
+  throttle from YouTube is the common one. Attempts packed into twenty minutes all land
   in the same throttle window, so they all fail, and the only thing they achieve is more
   requests against an IP that is already refusing us.
 
-  Jittered because a throttled source has hundreds of media items backing off in
-  lockstep, and they must not all come back at the same instant.
+  `base * attempt^4`, so at the default base of 30 the gaps are roughly 30s, 8min, 40min
+  and 2h. Jittered, because a throttled source has every pending item backing off
+  together and they must not all return in the same instant.
+
+  Read from the settings on every call rather than compiled in: how long a throttle lasts
+  depends on the connection it is happening to, which is not something this code can know.
 
   Returns integer() (seconds)
   """
   @impl Oban.Worker
   def backoff(%Oban.Job{attempt: attempt}) do
-    # 30s, 8min, 40min, 2h - a little under three hours across the five attempts.
-    trunc(:math.pow(attempt, 4) * 30 * (0.9 + :rand.uniform() * 0.2))
+    base = Settings.get!(:download_retry_backoff_base_seconds)
+
+    trunc(:math.pow(attempt, 4) * base * (0.9 + :rand.uniform() * 0.2))
   end
 
   @doc """
@@ -45,6 +49,11 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   Returns {:ok, %Task{}} | {:error, :duplicate_job} | {:error, %Ecto.Changeset{}}
   """
   def kickoff_with_task(media_item, job_args \\ %{}, job_opts \\ []) do
+    # Set here rather than in `use Oban.Worker` so it is a setting and not a recompile.
+    # An explicit job_opts still wins, since a caller asking for something specific knows
+    # more than the default does.
+    job_opts = Keyword.put_new(job_opts, :max_attempts, Settings.get!(:download_max_attempts))
+
     %{id: media_item.id}
     |> Map.merge(job_args)
     |> MediaDownloadWorker.new(job_opts)

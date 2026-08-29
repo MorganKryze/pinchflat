@@ -47,6 +47,18 @@ config :pinchflat, Pinchflat.Repo,
 # to avoid all instances of PF updating yt-dlp at the same time, which 1)
 # could result in rate limiting and 2) gives me time to react if an update
 # breaks something
+# How long a job may sit `executing` before Oban assumes the node that was running it is
+# gone and hands it back. An environment variable rather than a setting in the database
+# because Oban reads its plugin config once, at boot: a value in the database would not
+# be reread, so it would look adjustable and not be.
+#
+# Two hours by default, and the number that matters is the longest download this instance
+# can legitimately run - not how fast an orphan should come back, which nothing is waiting
+# on. Rescuing is purely time-based, so a window shorter than that real maximum hands back
+# a job that is still running, and two yt-dlp processes writing the same output path with
+# --force-overwrites corrupt the file.
+{orphaned_job_rescue_minutes, _} = Integer.parse(System.get_env("ORPHANED_JOB_RESCUE_MINUTES", "120"))
+
 %{hour: current_hour, minute: current_minute} = DateTime.utc_now()
 
 config :pinchflat, Oban,
@@ -65,15 +77,8 @@ config :pinchflat, Oban,
     # worker's uniqueness covers `:executing`, so no replacement job can be created for
     # that media item either. It is frozen for good, silently. Anything that restarts the
     # container mid-queue - an update, an OOM kill, a watchdog - loses one media item per
-    # job in flight.
-    #
-    # Rescuing is purely time-based: Oban makes no attempt to tell a dead node from a slow
-    # download, so too short a window re-runs a job that is still going, and two yt-dlp
-    # processes writing the same output path with --force-overwrites corrupt the file. Two
-    # hours is chosen against that, not against recovery speed, which nothing here is
-    # waiting on. Lower it only if downloads are known to finish well inside it - no worker
-    # sets a `timeout/1`, so nothing else bounds how long one may run.
-    {Oban.Plugins.Lifeline, rescue_after: :timer.hours(2)},
+    # job in flight. See ORPHANED_JOB_RESCUE_MINUTES above for how the window is chosen.
+    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(orphaned_job_rescue_minutes)},
     {Oban.Plugins.Cron,
      crontab: [
        {"#{current_minute} #{current_hour} * * *", Pinchflat.YtDlp.UpdateWorker},

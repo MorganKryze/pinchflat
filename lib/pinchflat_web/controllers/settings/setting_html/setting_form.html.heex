@@ -58,6 +58,22 @@
       />
 
       <.input
+        field={f[:download_max_attempts]}
+        placeholder="5"
+        type="number"
+        label="Download Retry Attempts"
+        help="How many times a failed download is retried before it is left for the next index to reconsider. Between 1 and 20. A throttled IP clears on its own after hours, so this is about outlasting it rather than trying harder"
+      />
+
+      <.input
+        field={f[:download_retry_backoff_base_seconds]}
+        placeholder="30"
+        type="number"
+        label="Retry Backoff Base (seconds)"
+        help="Spacing between retries, as base x attempt^4. At 30 the gaps are roughly 30s, 8min, 40min then 2h - long enough that the attempts are not all spent inside one throttle window. Raise it if your IP stays throttled for longer"
+      />
+
+      <.input
         field={f[:restrict_filenames]}
         type="toggle"
         label="Restrict Filenames"

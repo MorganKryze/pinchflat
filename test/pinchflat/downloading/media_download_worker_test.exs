@@ -5,6 +5,7 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
 
   alias Pinchflat.Media
   alias Pinchflat.Sources
+  alias Pinchflat.Settings
   alias Pinchflat.Utils.FilesystemUtils
   alias Pinchflat.Downloading.MediaDownloadWorker
 
@@ -54,12 +55,24 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
       assert job.priority == 5
     end
 
-    test "is limited to five attempts", %{media_item: media_item} do
+    test "takes its attempt limit from the settings", %{media_item: media_item} do
+      Settings.set(download_max_attempts: 2)
+
       assert {:ok, _} = MediaDownloadWorker.kickoff_with_task(media_item)
 
       [job] = all_enqueued(worker: MediaDownloadWorker, args: %{"id" => media_item.id})
 
-      assert job.max_attempts == 5
+      assert job.max_attempts == 2
+    end
+
+    test "lets an explicit max_attempts win over the setting", %{media_item: media_item} do
+      Settings.set(download_max_attempts: 2)
+
+      assert {:ok, _} = MediaDownloadWorker.kickoff_with_task(media_item, %{}, max_attempts: 9)
+
+      [job] = all_enqueued(worker: MediaDownloadWorker, args: %{"id" => media_item.id})
+
+      assert job.max_attempts == 9
     end
 
     test "priority can be set", %{media_item: media_item} do
@@ -481,10 +494,22 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
     test "grows fast enough to outlast a throttle window" do
       delays = Enum.map(1..4, fn attempt -> MediaDownloadWorker.backoff(%Oban.Job{attempt: attempt}) end)
 
-      # Strictly increasing despite the jitter, and the five attempts span hours
-      # rather than the twenty minutes Oban's default would give them.
+      # Strictly increasing despite the jitter, and the attempts span hours rather than
+      # the twenty minutes Oban's default would give them.
       assert delays == Enum.sort(delays)
       assert Enum.sum(delays) > 2 * 60 * 60
+    end
+
+    test "scales with the configured base" do
+      Settings.set(download_retry_backoff_base_seconds: 1)
+      short = MediaDownloadWorker.backoff(%Oban.Job{attempt: 3})
+
+      Settings.set(download_retry_backoff_base_seconds: 60)
+      long = MediaDownloadWorker.backoff(%Oban.Job{attempt: 3})
+
+      # How long a throttle lasts depends on the connection it happens to, so the number
+      # has to be the operator's rather than this module's.
+      assert long > short * 10
     end
   end
 end
