@@ -71,6 +71,15 @@ defmodule PinchflatWeb.Router do
     get "/healthcheck", HealthController, :check, log: false
   end
 
+  # The detailed version does need protecting - it reports counts, error text and how far
+  # behind the library is. Token rather than basic auth so a monitoring probe can reach it
+  # with a query string, which is the same trade the OPML feed already makes.
+  scope "/", PinchflatWeb do
+    pipe_through [:api, :token_protected_route]
+
+    get "/healthcheck/details", HealthController, :details
+  end
+
   scope "/dev" do
     pipe_through :browser
 
