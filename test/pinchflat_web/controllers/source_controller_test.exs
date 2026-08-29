@@ -174,6 +174,17 @@ defmodule PinchflatWeb.SourceControllerTest do
       assert [_] = all_enqueued(worker: MediaDownloadWorker)
     end
 
+    test "enqueues them ahead of the existing queue", %{conn: conn} do
+      source = source_fixture()
+      _media_item = media_item_fixture(%{source_id: source.id, media_filepath: nil})
+
+      post(conn, ~p"/sources/#{source.id}/force_download_pending")
+
+      # Oban orders by priority before scheduled_at, so at the worker's default of 5 a
+      # forced retry waits behind everything already queued rather than jumping it.
+      assert [%{priority: 0}] = all_enqueued(worker: MediaDownloadWorker)
+    end
+
     test "redirects to the source page", %{conn: conn} do
       source = source_fixture()
 
