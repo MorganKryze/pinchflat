@@ -54,6 +54,20 @@ defmodule Pinchflat.Boot.PreJobStartupTasksTest do
       assert Settings.get!(:download_backoff_paused_until) == nil
     end
 
+    test "forgets how far the escalation had got" do
+      Settings.set(
+        download_backoff_paused_until: DateTime.utc_now() |> DateTime.add(30, :minute) |> DateTime.truncate(:second)
+      )
+
+      Settings.set(download_backoff_extensions: 3)
+
+      # A restart is a fresh start, the same reason the pause itself goes. Carrying the
+      # count over would have the first pause after a reboot be the longest one.
+      PreJobStartupTasks.init(%{})
+
+      assert Settings.get!(:download_backoff_extensions) == 0
+    end
+
     test "does nothing when no pause was set" do
       PreJobStartupTasks.init(%{})
 

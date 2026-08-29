@@ -17,13 +17,19 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
   whether anything has changed, and the scheduled job is visible in the dashboard, which
   is the difference between a system that pauses and a system that has gone quiet.
 
-  ## Why the resume is not a probe
+  ## How long a pause lasts
 
-  Waiting the pause out is the whole behaviour. Testing the water with a request to
-  YouTube would add traffic during a block, which is what this exists to stop, and would
-  make when-it-resumes depend on something nobody can see. If the block outlasts the
-  pause, the next failure trips the threshold again and it pauses again - same effect, no
-  hidden state.
+  The base is `download_backoff_minutes`, scattered a fifth either way so a run of pauses
+  never ends on the same offset twice. With `download_backoff_escalate` on, which it is by
+  default, each refused probe makes the next pause longer - one base, then two, then
+  three, then four, and no further.
+
+  Through a thirteen-hour block that is eight requests rather than twenty-six, and a rate
+  that decays instead of holding steady. A constant rate over half a day is a signature
+  even with the offsets scattered; something that gives up gradually is not.
+
+  What it costs is recovery time. A block that clears just after a probe waits out the
+  whole of the next pause, which at the ceiling is four times the base.
   """
 
   require Logger
@@ -62,6 +68,7 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
   def resume do
     Enum.each(resumable_queues(), &Oban.resume_queue(queue: &1))
     Settings.set(download_backoff_paused_until: nil)
+    Settings.set(download_backoff_extensions: 0)
     Logger.info("Download backoff lifted, yt-dlp queues resumed")
 
     :ok
@@ -79,7 +86,7 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
   def extend do
     Logger.warning("Still being refused: keeping the yt-dlp queues stopped")
 
-    pause()
+    pause(Settings.get!(:download_backoff_extensions) + 1)
   end
 
   @doc """
@@ -133,17 +140,31 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
       DownloadHealth.downloads_since(since) == 0
   end
 
-  defp pause do
-    minutes = Settings.get!(:download_backoff_minutes)
+  # Four bases and no further. A ceiling in multiples rather than a number of its own: the
+  # one setting anybody has to understand stays `download_backoff_minutes`, and raising it
+  # raises the ceiling with it.
+  @max_multiplier 4
+
+  defp pause(extensions \\ 0) do
+    minutes = Settings.get!(:download_backoff_minutes) * multiplier(extensions)
     until = DateTime.utc_now() |> DateTime.add(jittered_seconds(minutes), :second) |> DateTime.truncate(:second)
 
     Enum.each(@yt_dlp_queues, &Oban.pause_queue(queue: &1))
     Settings.set(download_backoff_paused_until: until)
+    Settings.set(download_backoff_extensions: extensions)
     ResumeQueuesWorker.schedule_for(until)
 
     Logger.warning("Throttled by YouTube: pausing yt-dlp queues until #{until}")
 
     {:paused, until}
+  end
+
+  defp multiplier(extensions) do
+    if Settings.get!(:download_backoff_escalate) do
+      min(extensions + 1, @max_multiplier)
+    else
+      1
+    end
   end
 
   # A fifth either way, so a pause never ends on the same offset twice.

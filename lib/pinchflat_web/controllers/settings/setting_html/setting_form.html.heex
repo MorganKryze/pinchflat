@@ -118,6 +118,13 @@
       />
 
       <.input
+        field={f[:download_backoff_escalate]}
+        type="toggle"
+        label="Wait Longer After Each Refusal"
+        help="Only does anything when the above is on. Each refused question makes the next wait longer, up to four times the pause length, so a long block costs a handful of requests spread out rather than a steady two an hour. Turn it off to keep asking at a fixed interval, which starts again sooner and asks far more often"
+      />
+
+      <.input
         field={f[:forced_download_priority]}
         placeholder="5"
         type="number"

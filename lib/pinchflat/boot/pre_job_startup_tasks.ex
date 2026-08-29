@@ -89,6 +89,7 @@ defmodule Pinchflat.Boot.PreJobStartupTasks do
       until ->
         Logger.info("Clearing a queue pause that was set to last until #{until}: a restart resets it")
         Settings.set(download_backoff_paused_until: nil)
+        Settings.set(download_backoff_extensions: 0)
     end
   end
 

@@ -27,6 +27,8 @@ defmodule Pinchflat.Settings.Setting do
     :download_backoff_minutes,
     :download_backoff_paused_until,
     :download_backoff_probe_enabled,
+    :download_backoff_escalate,
+    :download_backoff_extensions,
     :indexing_paused,
     :downloading_paused,
     :set_aside_permanent_failures,
@@ -86,6 +88,12 @@ defmodule Pinchflat.Settings.Setting do
     # Whether the pause ends on an answer rather than on the clock. Off by default: a
     # fixed pause decides nothing, this one keeps deciding until YouTube agrees.
     field :download_backoff_probe_enabled, :boolean, default: false
+    # Whether each refused probe waits longer than the last. On by default, and only in
+    # effect once the probe is on: having opted into asking, you get the quiet version of
+    # asking. Off restores the fixed interval, which recovers sooner and asks four times
+    # as often through a long block.
+    field :download_backoff_escalate, :boolean, default: true
+    field :download_backoff_extensions, :integer, default: 0
 
     # Stopping the queues by hand. Off by default, and separate from the backoff above:
     # that one is a reaction and lifts itself, these are a decision and stay until you
@@ -120,5 +128,6 @@ defmodule Pinchflat.Settings.Setting do
     |> validate_number(:forced_download_priority, greater_than_or_equal_to: 0, less_than_or_equal_to: 9)
     |> validate_number(:download_backoff_threshold, greater_than_or_equal_to: 1)
     |> validate_number(:download_backoff_minutes, greater_than_or_equal_to: 1)
+    |> validate_number(:download_backoff_extensions, greater_than_or_equal_to: 0)
   end
 end

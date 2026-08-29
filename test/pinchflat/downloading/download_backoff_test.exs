@@ -116,6 +116,48 @@ defmodule Pinchflat.Downloading.DownloadBackoffTest do
     end
   end
 
+  describe "extend/0" do
+    setup do
+      Settings.set(download_backoff_minutes: 30)
+      :ok
+    end
+
+    defp pause_minutes do
+      trunc(DateTime.diff(DownloadBackoff.paused_until(), DateTime.utc_now()) / 60)
+    end
+
+    test "each refused probe waits longer than the last, up to four bases" do
+      # The first pause is one base; these are the ones after it, so the run starts at two.
+      for expected <- [60, 90, 120, 120, 120] do
+        DownloadBackoff.extend()
+
+        # A fifth of jitter either way, so the assertion is on the band rather than the
+        # number. Thirteen hours of block costs eight requests this way instead of
+        # twenty-six, and the rate decays rather than holding steady.
+        assert_in_delta pause_minutes(), expected, expected * 0.2 + 1
+      end
+    end
+
+    test "a probe that answers puts it back to the start" do
+      for _ <- 1..3, do: DownloadBackoff.extend()
+      DownloadBackoff.resume()
+
+      assert Settings.get!(:download_backoff_extensions) == 0
+
+      # Back to one step above the base rather than carrying on from the ceiling.
+      DownloadBackoff.extend()
+      assert_in_delta pause_minutes(), 60, 13
+    end
+
+    test "keeps the interval fixed when the escalation is off" do
+      Settings.set(download_backoff_escalate: false)
+
+      for _ <- 1..4, do: DownloadBackoff.extend()
+
+      assert_in_delta pause_minutes(), 30, 7
+    end
+  end
+
   describe "resume/0" do
     test "clears the pause" do
       for _ <- 1..3, do: throttled(1)
