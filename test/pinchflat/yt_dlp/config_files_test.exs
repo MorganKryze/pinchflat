@@ -10,6 +10,12 @@ defmodule Pinchflat.YtDlp.ConfigFilesTest do
 
   setup do
     dir = Path.join(Application.get_env(:pinchflat, :extras_directory), "yt-dlp-configs")
+
+    # Emptied before as well as after. Other suites write to this same directory with
+    # these same filenames and do not clean up, so a test here that only tidies after
+    # itself starts from whatever the last one left behind - which is how this file
+    # passed alone and failed in CI.
+    File.rm_rf!(dir)
     File.mkdir_p!(dir)
     on_exit(fn -> File.rm_rf!(dir) end)
 
