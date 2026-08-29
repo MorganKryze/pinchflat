@@ -1,3 +1,10 @@
+> [!NOTE]  
+> **This is a fork of [kieraneglin/pinchflat](https://github.com/kieraneglin/pinchflat)**, run at home
+> against a ~9,000 video / 2,164 hour library. It is not affiliated with or endorsed by the original
+> author, and its changes are not submitted upstream. Images are published to
+> `ghcr.io/morgankryze/pinchflat`. See [About this fork](#about-this-fork) for what differs and for
+> the AI disclosure.
+
 > [!IMPORTANT]  
 > (2025-02-14) [zakkarry](https://github.com/sponsors/zakkarry), who is a collaborator on [cross-seed](https://github.com/cross-seed/cross-seed) and an extremely helpful community member in general, is facing hard times due to medical debt and family illness. If you're able, please consider [sponsoring him on GitHub](https://github.com/sponsors/zakkarry) or donating via [buymeacoffee](https://tip.ary.dev). Tell him I sent you!
 
@@ -27,8 +34,62 @@
 
 # Your next YouTube media manager
 
+## About this fork
+
+Upstream is an excellent piece of software and none of what follows is a complaint about it. This
+fork exists because one usage pattern exposes problems the normal one does not: **back-catalogue
+retrieval** — thousands of videos pulled at once, over weeks, from a residential IP, into Jellyfin.
+Most of what is fixed here is invisible when following three channels in steady state.
+
+Every change below started as a measurement on a running instance, not as a guess. Upstream
+development has been paused since roughly the start of 2026, so nothing here waits on review there.
+
+### What's changed
+
+| Change                                                                                                                   | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tell an IP throttle apart from an age restriction ([`88c9031`](https://github.com/MorganKryze/pinchflat/commit/88c9031)) | `"Sign in to confirm"` was matched as a prefix, and it covers two opposite messages. `…your age` is permanent; `…you're not a bot` is a throttle that clears within hours. Both were abandoned, and abandoning returned `{:ok, :non_retry}`, so Oban recorded a success and no job was left to retry the item. Measured: **857 media items carrying that error with zero jobs between them**. Retries are now bounded to 5 attempts and spread over ~3 hours, so they outlast a throttle window instead of being spent inside it. |
+| Rescue download jobs orphaned by a restart ([`11dc963`](https://github.com/MorganKryze/pinchflat/commit/11dc963))        | `Oban.Plugins.Lifeline` was never enabled. A job left `executing` when the container dies stays there forever, and the download worker's uniqueness covers `:executing`, so no replacement job can be created for that media item either — it is frozen for good, silently. Rescued after 2 hours, chosen so a slow download is never mistaken for a dead node.                                                                                                                                                                   |
+| Publish under this account, and prove it ([`4332bba`](https://github.com/MorganKryze/pinchflat/commit/4332bba))          | Upstream's release workflow hardcodes its own registries. Rebuilt for GHCR only: actions pinned to commits with Dependabot behind them, the buildkit builder pinned by digest and watched weekly, tests gating the push on the same ref, and images signed with cosign, with SLSA provenance and an SBOM attached. `stable` and `latest` only move onto a digest whose signature has been verified.                                                                                                                               |
+
+Verify an image before running it:
+
+```bash
+cosign verify ghcr.io/morgankryze/pinchflat:stable \
+  --certificate-identity-regexp '^https://github.com/MorganKryze/pinchflat/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+### Still on the list
+
+Reading the yt-dlp self-update result instead of discarding it, a recorded reason whenever a media
+item is set aside, an error timestamp so the UI stops showing week-old messages as current, NFO
+dates in a format Jellyfin actually parses, a backoff that pauses all four yt-dlp queues during a
+block, and a health endpoint that makes any of this visible without opening the database.
+
+### AI disclosure
+
+The code in this fork is written with [Claude Code](https://www.anthropic.com/claude-code), an AI
+coding agent, working from a written specification and reviewed change by change before it lands.
+
+What that means in practice, so you can weigh it yourself:
+
+- **The diagnosis is human and measured.** Every problem above comes from ten days of instrumented
+  operation on a real library — job counts, error counts, files on disk compared against Jellyfin —
+  not from a model's impression of what might be wrong.
+- **The agent's claims were checked against the source.** Several first-pass conclusions turned out
+  to be wrong and were corrected before any code was written: the yt-dlp update worker _is_ on a
+  daily cron, and the yt-dlp config cascade _is_ wired up — both had different real defects than the
+  ones first suspected.
+- **Nothing merges unread or untested.** Every commit passes the project's own `mix check` — 970
+  tests, Credo, Sobelow, formatting — and each commit message states the reasoning and the
+  trade-off, including where this fork deliberately differs from a suggestion made upstream.
+
+If you find a bug here, report it here, not to upstream.
+
 ## Table of contents:
 
+- [About this fork](#about-this-fork)
 - [What it does](#what-it-does)
 - [Features](#features)
 - [Screenshots](#screenshots)
