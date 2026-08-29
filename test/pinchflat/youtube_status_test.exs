@@ -185,6 +185,58 @@ defmodule Pinchflat.YoutubeStatusTest do
     end
   end
 
+  describe "current/1" do
+    test "reads a wider window than one sample" do
+      media_item_fixture(%{media_downloaded_at: minutes_ago(40)})
+
+      # Forty minutes of quiet after a download is still a working connection. Reading
+      # only the last five would have the headline flickering to grey all day.
+      assert %{state: :nominal, downloads: 1} = YoutubeStatus.current()
+    end
+
+    test "carries the window it measured" do
+      current = YoutubeStatus.current(3)
+
+      assert DateTime.diff(current.until, current.since) == 3 * 3600
+    end
+  end
+
+  describe "history_buckets/2" do
+    test "covers the whole range whether or not anything was written" do
+      buckets = YoutubeStatus.history_buckets(24, 96)
+
+      assert length(buckets) == 96
+      # A stretch nothing was measuring is not a stretch where nothing happened.
+      assert Enum.all?(buckets, &(&1.state == :no_data))
+    end
+
+    test "the worst reading in a bucket is the one it shows" do
+      sample_at(minutes_ago(10), :nominal)
+      sample_at(minutes_ago(12), :blocked)
+
+      # Both fall in the same quarter hour. A block that lasted ten minutes still colours
+      # its segment red, which is the whole point of a history bar.
+      assert Enum.any?(YoutubeStatus.history_buckets(24, 96), &(&1.state == :blocked))
+    end
+
+    test "a green sample beats an idle one" do
+      sample_at(minutes_ago(10), :nominal)
+      sample_at(minutes_ago(12), :idle)
+
+      refute Enum.any?(YoutubeStatus.history_buckets(24, 96), &(&1.state == :idle))
+      assert Enum.any?(YoutubeStatus.history_buckets(24, 96), &(&1.state == :nominal))
+    end
+
+    test "adds up the counts of everything in the bucket" do
+      Repo.insert!(%StatusSample{state: :nominal, window_seconds: 300, downloads: 2, inserted_at: minutes_ago(10)})
+      Repo.insert!(%StatusSample{state: :nominal, window_seconds: 300, downloads: 3, inserted_at: minutes_ago(12)})
+
+      bucket = Enum.find(YoutubeStatus.history_buckets(24, 96), &(&1.samples == 2))
+
+      assert bucket.downloads == 5
+    end
+  end
+
   describe "prune!/0" do
     test "keeps the retention window and drops what is behind it" do
       for days <- [1, 45], do: sample_at(minutes_ago(days * 24 * 60))

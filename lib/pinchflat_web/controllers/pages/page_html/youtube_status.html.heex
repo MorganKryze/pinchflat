@@ -1,0 +1,75 @@
+<div class="mb-6 flex gap-3 flex-row items-center justify-between">
+  <div class="flex gap-3 items-center">
+    <h2 class="text-title-md2 font-bold text-white ml-4">
+      YouTube Status
+    </h2>
+  </div>
+</div>
+
+<div class={["rounded-sm border shadow-default bg-boxdark px-7.5 py-6", status_border(@current.state)]}>
+  <div class="flex items-center gap-4">
+    <span class={["h-4 w-4 shrink-0 rounded-full", status_colour(@current.state)]}></span>
+    <div>
+      <h3 class="text-title-sm font-bold text-white">{status_headline(@current.state)}</h3>
+      <p class="text-sm mt-1">{status_detail(@current)}</p>
+    </div>
+  </div>
+</div>
+
+<div class="rounded-sm border shadow-default border-strokedark bg-boxdark mt-4 px-7.5 py-6">
+  <span class="text-2xl font-medium">Last 24 hours</span>
+
+  <%!-- Native title tooltips: a segment is 1% of the width, and anything that has to be
+        positioned by hand would spend more code than the bar itself. --%>
+  <div class="flex gap-px h-12 mt-4">
+    <div
+      :for={bucket <- @buckets}
+      class={["flex-1 rounded-sm", status_colour(bucket.state)]}
+      title={bucket_tooltip(bucket)}
+    >
+    </div>
+  </div>
+
+  <div class="flex justify-between text-sm mt-2">
+    <span>24 hours ago</span>
+    <span>now</span>
+  </div>
+
+  <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm mt-6">
+    <span :for={{state, meaning} <- @legend} class="flex items-center gap-2">
+      <span class={["h-3 w-3 shrink-0 rounded-sm", status_colour(state)]}></span>
+      {meaning}
+    </span>
+  </div>
+</div>
+
+<div class="rounded-sm border shadow-default border-strokedark bg-boxdark mt-4 px-7.5 py-6">
+  <span class="text-2xl font-medium">Details</span>
+
+  <dl class="grid grid-cols-1 gap-4 mt-4 md:grid-cols-3">
+    <div>
+      <dt class="text-sm">Last successful download</dt>
+      <dd class="text-white font-medium">
+        <%= if @health.last_successful_download_at do %>
+          <.time_ago datetime={@health.last_successful_download_at} />
+        <% else %>
+          never
+        <% end %>
+      </dd>
+    </div>
+    <div>
+      <dt class="text-sm">yt-dlp queues</dt>
+      <dd class="text-white font-medium">
+        <%= if @health.queues_paused_until do %>
+          paused until <.datetime_in_zone datetime={@health.queues_paused_until} format="%H:%M" />
+        <% else %>
+          running
+        <% end %>
+      </dd>
+    </div>
+    <div>
+      <dt class="text-sm">yt-dlp version</dt>
+      <dd class="text-white font-medium">{@health.yt_dlp_version || "unknown"}</dd>
+    </div>
+  </dl>
+</div>

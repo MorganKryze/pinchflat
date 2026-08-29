@@ -43,6 +43,7 @@ defmodule PinchflatWeb.Router do
     pipe_through :browser
 
     get "/", Pages.PageController, :home
+    get "/youtube_status", Pages.PageController, :youtube_status
 
     resources "/media_profiles", MediaProfiles.MediaProfileController
     resources "/search", Searches.SearchController, only: [:show], singleton: true

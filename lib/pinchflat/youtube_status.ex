@@ -130,6 +130,78 @@ defmodule Pinchflat.YoutubeStatus do
   end
 
   @doc """
+  The reading for the last few hours, measured now rather than read from a sample.
+
+  The headline on the page, and deliberately a wider window than one sample: five minutes
+  of quiet on a caught-up library is normal and would have the colour flickering to grey
+  all day. An hour of quiet is worth showing as quiet.
+
+  Returns map()
+  """
+  def current(hours \\ 1) do
+    now = DateTime.utc_now()
+    since = DateTime.add(now, -hours, :hour)
+    counts = measure(since, now)
+
+    Map.merge(counts, %{state: state_for(counts), since: since, until: now})
+  end
+
+  @doc """
+  The history as a fixed row of equal time buckets, oldest first.
+
+  Buckets rather than one bar per sample, because a bar per sample draws four samples as a
+  full day and hides that the rest is missing. A bucket nothing was written for is
+  `:no_data`, which is not `:idle`: idle means this was measured and nothing was happening,
+  no_data means nothing was measuring.
+
+  Returns [map()]
+  """
+  def history_buckets(hours \\ 24, bucket_count \\ 96) do
+    now = DateTime.utc_now()
+    since = DateTime.add(now, -hours, :hour)
+    width = max(div(DateTime.diff(now, since), bucket_count), 1)
+
+    grouped =
+      hours
+      |> history()
+      |> Enum.group_by(fn sample ->
+        min(div(DateTime.diff(sample.inserted_at, since), width), bucket_count - 1)
+      end)
+
+    Enum.map(0..(bucket_count - 1), fn index ->
+      from = DateTime.add(since, index * width, :second)
+
+      grouped
+      |> Map.get(index, [])
+      |> summarise_bucket(from, DateTime.add(from, width, :second))
+    end)
+  end
+
+  # Worst state wins, so a block that lasted ten minutes still colours its bucket. Sorted
+  # by how much trouble it reports, which puts a green sample above an idle one - a bucket
+  # where something downloaded is a bucket where downloading worked.
+  @severity %{blocked: 3, degraded: 2, nominal: 1, idle: 0}
+
+  defp summarise_bucket([], from, to) do
+    %{state: :no_data, from: from, to: to, samples: 0}
+  end
+
+  defp summarise_bucket(samples, from, to) do
+    counts =
+      Enum.reduce(samples, %{}, fn sample, acc ->
+        Map.merge(acc, Map.take(sample, count_fields()), fn _key, a, b -> a + b end)
+      end)
+
+    state = Enum.max_by(samples, &@severity[&1.state]).state
+
+    Map.merge(counts, %{state: state, from: from, to: to, samples: length(samples)})
+  end
+
+  defp count_fields do
+    ~w(downloads download_failures connection_failures throttle_failures indexing_successes indexing_failures)a
+  end
+
+  @doc """
   The most recent sample, or nil if none has been taken.
 
   Returns %StatusSample{} | nil

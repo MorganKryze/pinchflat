@@ -4,7 +4,18 @@ defmodule PinchflatWeb.Pages.PageController do
 
   alias Pinchflat.Repo
   alias Pinchflat.Sources.Source
+  alias Pinchflat.YoutubeStatus
   alias Pinchflat.Profiles.MediaProfile
+  alias Pinchflat.Downloading.DownloadHealth
+
+  # What each colour claims, said once so the page and the tests read the same list.
+  @legend [
+    nominal: "downloads getting through",
+    degraded: "indexing works, downloads refused",
+    blocked: "both refused",
+    idle: "nothing attempted",
+    no_data: "nothing measuring"
+  ]
 
   def home(conn, params) do
     done_onboarding = params["onboarding"] == "0"
@@ -17,6 +28,15 @@ defmodule PinchflatWeb.Pages.PageController do
     else
       render_home_page(conn)
     end
+  end
+
+  def youtube_status(conn, _params) do
+    render(conn, :youtube_status,
+      current: YoutubeStatus.current(),
+      buckets: YoutubeStatus.history_buckets(),
+      health: DownloadHealth.summary(24),
+      legend: @legend
+    )
   end
 
   defp render_home_page(conn) do
