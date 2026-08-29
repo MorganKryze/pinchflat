@@ -61,6 +61,19 @@ config :pinchflat, Oban,
   plugins: [
     # Keep old jobs for 30 days for display in the UI
     {Oban.Plugins.Pruner, max_age: 30 * 24 * 60 * 60},
+    # A job left `executing` when the node dies stays there forever, and the download
+    # worker's uniqueness covers `:executing`, so no replacement job can be created for
+    # that media item either. It is frozen for good, silently. Anything that restarts the
+    # container mid-queue - an update, an OOM kill, a watchdog - loses one media item per
+    # job in flight.
+    #
+    # Rescuing is purely time-based: Oban makes no attempt to tell a dead node from a slow
+    # download, so too short a window re-runs a job that is still going, and two yt-dlp
+    # processes writing the same output path with --force-overwrites corrupt the file. Two
+    # hours is chosen against that, not against recovery speed, which nothing here is
+    # waiting on. Lower it only if downloads are known to finish well inside it - no worker
+    # sets a `timeout/1`, so nothing else bounds how long one may run.
+    {Oban.Plugins.Lifeline, rescue_after: :timer.hours(2)},
     {Oban.Plugins.Cron,
      crontab: [
        {"#{current_minute} #{current_hour} * * *", Pinchflat.YtDlp.UpdateWorker},
