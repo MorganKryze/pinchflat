@@ -10,6 +10,24 @@ defmodule Pinchflat.Downloading.DownloadErrors do
 
   Three copies of a rule are three chances to drift. The table below is the rule.
 
+  ## Why the patterns are short, and plain ASCII
+
+  yt-dlp writes `Sign in to confirm you\u2019re not a bot` with a typographic apostrophe. A
+  pattern written with the ASCII one never matched it, and every test in this repo typed
+  the ASCII one too, so the tests agreed with the bug. Nothing downstream noticed, because
+  an unrecognised message is retryable and that is the right answer by accident - but
+  `throttled?/1` was false for every throttle there has ever been, so the queue backoff
+  could not arm, and its threshold counted zero out of fifty-four refusals.
+
+  Two rules came out of that.
+
+  A pattern is the shortest fragment that identifies the failure and nothing else. Matching
+  a whole English sentence composed by another program is a bet on its punctuation.
+
+  A pattern contains ASCII only, and there is a test that says so. `throttle_failures_since/1`
+  matches in SQL, where none of the normalising below is available, so a pattern that needs
+  normalising to work would be a rule that behaves differently depending on who asks.
+
   ## What each column decides
 
     * `retryable` - whether trying again could ever work. False means the worker stops
@@ -25,7 +43,9 @@ defmodule Pinchflat.Downloading.DownloadErrors do
   @errors [
     %{
       key: :throttled,
-      pattern: "Sign in to confirm you're not a bot",
+      # Not "Sign in to confirm", which is also how the age gate opens - that prefix
+      # covering two opposite messages is the defect this module was written for.
+      pattern: "not a bot",
       label: "Throttled by YouTube",
       retryable: true,
       fixable_with_cookies: false
@@ -39,7 +59,7 @@ defmodule Pinchflat.Downloading.DownloadErrors do
     },
     %{
       key: :members_only,
-      pattern: "This video is available to this channel's members",
+      pattern: "available to this channel",
       label: "Members only",
       retryable: false,
       fixable_with_cookies: true
@@ -123,9 +143,34 @@ defmodule Pinchflat.Downloading.DownloadErrors do
     Enum.find(@errors, &(&1.key == :throttled)).pattern
   end
 
+  @doc """
+  The failures this knows about, for callers that need the table rather than a verdict.
+
+  Returns [map()]
+  """
+  def all, do: @errors
+
+  # The typographic characters a message picks up on its way through YouTube and yt-dlp,
+  # flattened to the ASCII the patterns are written in. Belt and braces: the patterns
+  # avoid these characters entirely, and this means a future one that cannot avoid them
+  # still matches.
+  @typographic %{
+    "\u2018" => "'",
+    "\u2019" => "'",
+    "\u201C" => "\"",
+    "\u201D" => "\"",
+    "\u2013" => "-",
+    "\u2014" => "-",
+    "\u00A0" => " "
+  }
+
   defp find(message) do
-    message = to_string(message)
+    message = message |> to_string() |> normalise()
 
     Enum.find(@errors, &String.contains?(message, &1.pattern))
+  end
+
+  defp normalise(message) do
+    Enum.reduce(@typographic, message, fn {from, to}, acc -> String.replace(acc, from, to) end)
   end
 end

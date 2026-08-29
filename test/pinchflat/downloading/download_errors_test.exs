@@ -75,4 +75,51 @@ defmodule Pinchflat.Downloading.DownloadErrorsTest do
       assert DownloadErrors.classify(DownloadErrors.throttle_pattern()) == :throttled
     end
   end
+
+  describe "the message yt-dlp actually writes" do
+    # Copied from production logs, apostrophe included. Every other fixture in this repo
+    # was typed by hand with an ASCII apostrophe, so every test agreed with the bug: on a
+    # real instance `throttled?/1` was false for all fifty-four refusals in half an hour,
+    # the backoff could not arm, and its threshold counted zero.
+    @real_throttle "ERROR: [youtube] y1nTvXlf3Uo: Sign in to confirm you\u2019re not a bot. Use --cookies-from-browser or --cookies for the authentication. See https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"
+    @real_members "ERROR: [youtube] abc: Join this channel to get access to members-only content like this video. This video is available to this channel\u2019s members on level: Patron."
+
+    test "a throttle is recognised" do
+      assert DownloadErrors.classify(@real_throttle) == :throttled
+      assert DownloadErrors.throttled?(@real_throttle)
+      assert DownloadErrors.retryable?(@real_throttle)
+      refute DownloadErrors.fixable_with_cookies?(@real_throttle)
+    end
+
+    test "members-only is recognised" do
+      # The other pattern with an apostrophe in it. This one failed quietly in the other
+      # direction: the item stayed retryable forever and cookies were never offered.
+      assert DownloadErrors.classify(@real_members) == :members_only
+      refute DownloadErrors.retryable?(@real_members)
+      assert DownloadErrors.fixable_with_cookies?(@real_members)
+    end
+
+    test "the ASCII spelling still works" do
+      assert DownloadErrors.throttled?("Sign in to confirm you're not a bot")
+    end
+  end
+
+  describe "the patterns themselves" do
+    test "are ASCII, so SQL and Elixir cannot disagree about them" do
+      # `throttle_failures_since/1` matches in SQL, where the normalising in `find/1` is
+      # not available. A pattern needing it would behave differently depending on who
+      # asked - which is the shape of the bug that got here in the first place.
+      for %{key: key, pattern: pattern} <- DownloadErrors.all() do
+        assert pattern == for(<<c <- pattern>>, c < 128, into: "", do: <<c>>),
+               "#{key} has a pattern SQL cannot match: #{inspect(pattern)}"
+      end
+    end
+
+    test "none of them matches the age gate as well as the throttle" do
+      age = "Sign in to confirm your age"
+
+      assert DownloadErrors.classify(age) == :age_restricted
+      refute DownloadErrors.throttled?(age)
+    end
+  end
 end

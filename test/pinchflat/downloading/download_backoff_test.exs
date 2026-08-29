@@ -5,13 +5,17 @@ defmodule Pinchflat.Downloading.DownloadBackoffTest do
 
   alias Pinchflat.Settings
   alias Pinchflat.Downloading.DownloadBackoff
-  alias Pinchflat.Downloading.DownloadHealth
   alias Pinchflat.Downloading.ResumeQueuesWorker
+
+  # The message as yt-dlp writes it, apostrophe and all, rather than the pattern we match
+  # it with. A fixture built from our own constant cannot tell us whether the constant is
+  # right, which is how this arming was broken in production while every test passed.
+  @real_throttle "ERROR: [youtube] abc: Sign in to confirm you\u2019re not a bot. Use --cookies-from-browser"
 
   defp throttled(minutes_ago) do
     media_item_fixture(%{
       media_filepath: nil,
-      last_error: DownloadHealth.throttle_error(),
+      last_error: @real_throttle,
       last_error_at: DateTime.utc_now() |> DateTime.add(-minutes_ago, :minute) |> DateTime.truncate(:second)
     })
   end

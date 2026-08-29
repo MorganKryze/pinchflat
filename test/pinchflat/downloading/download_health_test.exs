@@ -27,6 +27,20 @@ defmodule Pinchflat.Downloading.DownloadHealthTest do
       assert DownloadHealth.failures_since(hours_ago(1)) == 1
     end
 
+    test "counts the throttle yt-dlp actually writes" do
+      # The apostrophe is U+2019, as it comes out of yt-dlp. This count is matched in SQL,
+      # where the normalising in `DownloadErrors.find/1` is not available, so the pattern
+      # has to be something SQLite can find on its own. It was not: on a real instance
+      # this returned 0 while fifty-four throttles sat in the table, and the queue backoff
+      # never reached its threshold.
+      media_item_fixture(%{
+        last_error: "ERROR: [youtube] abc: Sign in to confirm you\u2019re not a bot. Use --cookies",
+        last_error_at: hours_ago(0)
+      })
+
+      assert DownloadHealth.throttle_failures_since(hours_ago(1)) == 1
+    end
+
     test "separates a throttle from every other failure" do
       media_item_fixture(%{last_error: "Sign in to confirm you're not a bot", last_error_at: hours_ago(0)})
       media_item_fixture(%{last_error: "Video unavailable", last_error_at: hours_ago(0)})
