@@ -55,6 +55,14 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
       assert job.priority == 5
     end
 
+    test "defaults to Oban's attempt limit, as upstream does", %{media_item: media_item} do
+      assert {:ok, _} = MediaDownloadWorker.kickoff_with_task(media_item)
+
+      [job] = all_enqueued(worker: MediaDownloadWorker, args: %{"id" => media_item.id})
+
+      assert job.max_attempts == 20
+    end
+
     test "takes its attempt limit from the settings", %{media_item: media_item} do
       Settings.set(download_max_attempts: 2)
 
@@ -491,11 +499,17 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
   end
 
   describe "backoff/1" do
-    test "grows fast enough to outlast a throttle window" do
+    test "leaves Oban's own backoff alone by default" do
+      # The fork's rule: upstream behaviour unless someone asks for something else.
+      # Oban's curve keeps the early attempts inside about twenty minutes.
+      assert MediaDownloadWorker.backoff(%Oban.Job{attempt: 1}) < 60
+    end
+
+    test "spreads the attempts over hours once a base is set" do
+      Settings.set(download_retry_backoff_base_seconds: 30)
+
       delays = Enum.map(1..4, fn attempt -> MediaDownloadWorker.backoff(%Oban.Job{attempt: attempt}) end)
 
-      # Strictly increasing despite the jitter, and the attempts span hours rather than
-      # the twenty minutes Oban's default would give them.
       assert delays == Enum.sort(delays)
       assert Enum.sum(delays) > 2 * 60 * 60
     end

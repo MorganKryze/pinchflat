@@ -59,18 +59,26 @@
 
       <.input
         field={f[:download_max_attempts]}
-        placeholder="5"
+        placeholder="20"
         type="number"
         label="Download Retry Attempts"
-        help="How many times a failed download is retried before it is left for the next index to reconsider. Between 1 and 20. A throttled IP clears on its own after hours, so this is about outlasting it rather than trying harder"
+        help="How many times a failed download is retried before it is left for the next index to reconsider. Between 1 and 20. Lower this if you also set a retry backoff base, since the delays grow very fast"
       />
 
       <.input
         field={f[:download_retry_backoff_base_seconds]}
-        placeholder="30"
+        placeholder="Leave blank for the default"
         type="number"
         label="Retry Backoff Base (seconds)"
-        help="Spacing between retries, as base x attempt^4. At 30 the gaps are roughly 30s, 8min, 40min then 2h - long enough that the attempts are not all spent inside one throttle window. Raise it if your IP stays throttled for longer"
+        help="Leave blank to space retries the normal way, which packs the early attempts into about twenty minutes. Set a number to spread them much further instead, as base x attempt^4 - at 30 the gaps become roughly 30s, 8min, 40min then 2h, which outlasts an IP throttle rather than being spent inside one"
+      />
+
+      <.input
+        field={f[:forced_download_priority]}
+        placeholder="5"
+        type="number"
+        label="Forced Retry Priority"
+        help="Queue priority given to 'Force Download Pending', from 0 to 9. Jobs run in priority order before queue order, so at the default of 5 a forced retry waits behind everything already queued - which on a busy source can be days. Set 0 to run them first"
       />
 
       <.input

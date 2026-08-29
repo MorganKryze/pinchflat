@@ -119,12 +119,12 @@ defmodule PinchflatWeb.Sources.SourceController do
       conn,
       id,
       "Forcing download of pending media items.",
-      # priority: 0 rather than the worker's default of 5. Oban orders by priority before
-      # scheduled_at, so without this a forced retry is inserted with today's timestamp
-      # and queues up behind every job already waiting - which, on a source that has been
-      # indexing for a while, is days of work. Someone clicking this button is asking for
-      # these items now; that is the entire difference between it and waiting.
-      &DownloadingHelpers.enqueue_pending_download_tasks(&1, priority: 0)
+      # Upstream inserts these at the worker default of 5, which is what this does too
+      # unless the priority has been changed. Lowering it matters more than it sounds:
+      # Oban orders by priority before scheduled_at, so at 5 a forced retry queues up
+      # behind every job already waiting, which on a source that has been indexing for a
+      # while is days. Someone clicking this button is usually asking for these items now.
+      &DownloadingHelpers.enqueue_pending_download_tasks(&1, priority: Settings.get!(:forced_download_priority))
     )
   end
 

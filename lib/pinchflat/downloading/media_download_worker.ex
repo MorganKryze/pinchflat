@@ -20,16 +20,17 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   alias Pinchflat.Lifecycle.UserScripts.CommandRunner, as: UserScriptRunner
 
   @doc """
-  Spreads the retries over hours rather than Oban's default of about twenty minutes.
+  Oban's own backoff unless a base is configured, in which case a much longer curve.
 
-  The failures worth retrying here clear on the scale of hours, not seconds: an IP
-  throttle from YouTube is the common one. Attempts packed into twenty minutes all land
-  in the same throttle window, so they all fail, and the only thing they achieve is more
+  Upstream leaves this alone, so nothing here changes until someone asks for it. What
+  they would be asking for: the failures worth retrying on this queue clear on the scale
+  of hours, not seconds, an IP throttle from YouTube being the common one. Oban's default
+  packs its early attempts into about twenty minutes, which sits entirely inside a
+  throttle window, so every attempt in it fails and the only thing they achieve is more
   requests against an IP that is already refusing us.
 
-  `base * attempt^4`, so at the default base of 30 the gaps are roughly 30s, 8min, 40min
-  and 2h. Jittered, because a throttled source has every pending item backing off
-  together and they must not all return in the same instant.
+  With a base set the gaps are `base * attempt^4`, jittered - at 30 that is roughly 30s,
+  8min, 40min then 2h. It grows fast, so lower the attempt limit alongside it.
 
   Read from the settings on every call rather than compiled in: how long a throttle lasts
   depends on the connection it is happening to, which is not something this code can know.
@@ -37,10 +38,11 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   Returns integer() (seconds)
   """
   @impl Oban.Worker
-  def backoff(%Oban.Job{attempt: attempt}) do
-    base = Settings.get!(:download_retry_backoff_base_seconds)
-
-    trunc(:math.pow(attempt, 4) * base * (0.9 + :rand.uniform() * 0.2))
+  def backoff(%Oban.Job{attempt: attempt} = job) do
+    case Settings.get!(:download_retry_backoff_base_seconds) do
+      nil -> super(job)
+      base -> trunc(:math.pow(attempt, 4) * base * (0.9 + :rand.uniform() * 0.2))
+    end
   end
 
   @doc """

@@ -21,6 +21,7 @@ defmodule Pinchflat.Settings.Setting do
     :download_throughput_limit,
     :download_max_attempts,
     :download_retry_backoff_base_seconds,
+    :forced_download_priority,
     :restrict_filenames
   ]
 
@@ -31,7 +32,7 @@ defmodule Pinchflat.Settings.Setting do
     :audio_codec_preference,
     :extractor_sleep_interval_seconds,
     :download_max_attempts,
-    :download_retry_backoff_base_seconds
+    :forced_download_priority
   ]
 
   schema "settings" do
@@ -52,8 +53,17 @@ defmodule Pinchflat.Settings.Setting do
 
     # How hard to keep trying a download that failed. Read when the job runs, not when it
     # is compiled, so a change takes effect on the next attempt without a restart.
-    field :download_max_attempts, :integer, default: 5
-    field :download_retry_backoff_base_seconds, :integer, default: 30
+    #
+    # The defaults are upstream's: 20 is what Oban uses when a worker sets no limit, and a
+    # nil backoff base means Oban's own backoff curve. Setting a base opts into this
+    # fork's much longer one, which is built to outlast an IP throttle rather than to
+    # recover from a blip - lower the attempt count if you do, because base * attempt^4
+    # reaches absurd delays long before the twentieth try.
+    field :download_max_attempts, :integer, default: 20
+    field :download_retry_backoff_base_seconds, :integer
+    # 5 is what the worker itself defaults to and what upstream inserts. 0 puts forced
+    # retries in front of everything already queued.
+    field :forced_download_priority, :integer, default: 5
 
     field :video_codec_preference, :string
     field :audio_codec_preference, :string
@@ -69,5 +79,7 @@ defmodule Pinchflat.Settings.Setting do
     # runs the job at all, which is not a setting anyone wants by accident.
     |> validate_number(:download_max_attempts, greater_than_or_equal_to: 1, less_than_or_equal_to: 20)
     |> validate_number(:download_retry_backoff_base_seconds, greater_than_or_equal_to: 1)
+    # Oban's own range.
+    |> validate_number(:forced_download_priority, greater_than_or_equal_to: 0, less_than_or_equal_to: 9)
   end
 end
