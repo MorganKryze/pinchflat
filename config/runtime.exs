@@ -83,7 +83,10 @@ config :pinchflat, Oban,
      crontab: [
        {"#{current_minute} #{current_hour} * * *", Pinchflat.YtDlp.UpdateWorker},
        {"0 1 * * *", Pinchflat.Downloading.MediaRetentionWorker},
-       {"0 2 * * *", Pinchflat.Downloading.MediaQualityUpgradeWorker}
+       {"0 2 * * *", Pinchflat.Downloading.MediaQualityUpgradeWorker},
+       # Every five minutes, matching YoutubeStatus.interval_seconds/0. Reads rows that
+       # already exist and writes one; it never contacts YouTube.
+       {"*/5 * * * *", Pinchflat.YoutubeStatus.StatusSamplerWorker}
      ]}
   ]
 
