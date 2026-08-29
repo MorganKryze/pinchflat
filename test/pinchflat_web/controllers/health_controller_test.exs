@@ -45,6 +45,17 @@ defmodule PinchflatWeb.HealthControllerTest do
       assert body["last_successful_download_at"] == nil
     end
 
+    test "says when the queues are stopped on purpose", %{conn: conn} do
+      until = DateTime.utc_now() |> DateTime.add(20, :minute) |> DateTime.truncate(:second)
+      Settings.set(download_backoff_paused_until: until)
+
+      conn = get(conn, "/healthcheck/details?route_token=#{Settings.get!(:route_token)}")
+
+      # Zero downloads in an hour means one thing if the queues are running and another
+      # entirely if something stopped them deliberately.
+      assert json_response(conn, 200)["queues_paused_until"]
+    end
+
     test "accepts a wider window", %{conn: conn} do
       media_item_fixture(%{media_downloaded_at: DateTime.add(DateTime.utc_now(), -5, :hour)})
 

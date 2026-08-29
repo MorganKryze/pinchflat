@@ -22,6 +22,10 @@ defmodule Pinchflat.Settings.Setting do
     :download_max_attempts,
     :download_retry_backoff_base_seconds,
     :forced_download_priority,
+    :download_backoff_enabled,
+    :download_backoff_threshold,
+    :download_backoff_minutes,
+    :download_backoff_paused_until,
     :restrict_filenames
   ]
 
@@ -65,6 +69,16 @@ defmodule Pinchflat.Settings.Setting do
     # retries in front of everything already queued.
     field :forced_download_priority, :integer, default: 5
 
+    # Stopping the yt-dlp queues while YouTube is refusing us. Off by default: it is the
+    # only thing here that stops work on its own, so it is opted into rather than
+    # inherited on an update.
+    field :download_backoff_enabled, :boolean, default: false
+    field :download_backoff_threshold, :integer, default: 5
+    field :download_backoff_minutes, :integer, default: 30
+    # State rather than preference, kept in the open so "why is nothing downloading" has
+    # an answer with a time on it instead of living inside a process.
+    field :download_backoff_paused_until, :utc_datetime
+
     field :video_codec_preference, :string
     field :audio_codec_preference, :string
   end
@@ -81,5 +95,7 @@ defmodule Pinchflat.Settings.Setting do
     |> validate_number(:download_retry_backoff_base_seconds, greater_than_or_equal_to: 1)
     # Oban's own range.
     |> validate_number(:forced_download_priority, greater_than_or_equal_to: 0, less_than_or_equal_to: 9)
+    |> validate_number(:download_backoff_threshold, greater_than_or_equal_to: 1)
+    |> validate_number(:download_backoff_minutes, greater_than_or_equal_to: 1)
   end
 end

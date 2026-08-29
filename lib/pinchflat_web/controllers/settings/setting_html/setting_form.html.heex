@@ -74,6 +74,29 @@
       />
 
       <.input
+        field={f[:download_backoff_enabled]}
+        type="toggle"
+        label="Pause When Throttled"
+        help="When YouTube starts refusing requests from this address, stop all yt-dlp queues for a while instead of burning through the queue on refusals. Off by default, since it stops work on its own"
+      />
+
+      <.input
+        field={f[:download_backoff_threshold]}
+        placeholder="5"
+        type="number"
+        label="Throttle Pause Threshold"
+        help="How many throttled downloads, with nothing at all succeeding, before the queues stop"
+      />
+
+      <.input
+        field={f[:download_backoff_minutes]}
+        placeholder="30"
+        type="number"
+        label="Throttle Pause Minutes"
+        help="How long to stop for, and also how far back the threshold looks: 'if the last 30 minutes were nothing but refusals, stop for 30 minutes'. If the block outlasts it, the next failure stops the queues again"
+      />
+
+      <.input
         field={f[:forced_download_priority]}
         placeholder="5"
         type="number"

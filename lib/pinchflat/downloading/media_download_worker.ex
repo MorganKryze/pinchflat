@@ -16,6 +16,8 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   alias Pinchflat.Media
   alias Pinchflat.Media.FileSyncing
   alias Pinchflat.Downloading.MediaDownloader
+  alias Pinchflat.Downloading.DownloadHealth
+  alias Pinchflat.Downloading.DownloadBackoff
 
   alias Pinchflat.Lifecycle.UserScripts.CommandRunner, as: UserScriptRunner
 
@@ -191,7 +193,21 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
 
       {:ok, :non_retry}
     else
+      maybe_back_off(message)
+
       {:error, :download_failed}
+    end
+  end
+
+  # A throttle is the one failure that says "stop asking" rather than "try again". Every
+  # other error here is worth another attempt straight away; this one makes the next
+  # attempt part of the problem, so it is the only one that can stop the queues.
+  #
+  # Checked here rather than by something watching from outside because this is already
+  # the moment the refusal arrives - nothing has to wake up and go looking for it.
+  defp maybe_back_off(message) do
+    if String.contains?(to_string(message), DownloadHealth.throttle_error()) do
+      DownloadBackoff.maybe_pause()
     end
   end
 

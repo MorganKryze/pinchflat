@@ -176,6 +176,36 @@ defmodule Pinchflat.Downloading.MediaDownloadWorkerTest do
       end)
     end
 
+    test "stops the queues when a throttle is the last straw", %{media_item: media_item} do
+      Settings.set(download_backoff_enabled: true)
+      Settings.set(download_backoff_threshold: 1)
+
+      expect(YtDlpRunnerMock, :run, 2, fn
+        _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}
+        _url, :download, _opts, _ot, _addl -> {:error, "Sign in to confirm you're not a bot", 1}
+      end)
+
+      perform_job(MediaDownloadWorker, %{id: media_item.id, quality_upgrade?: true})
+
+      # The refusal arrives here, so this is where it is noticed - nothing has to wake up
+      # and go looking for it.
+      assert Settings.get!(:download_backoff_paused_until)
+    end
+
+    test "leaves the queues alone for a failure that is not a throttle", %{media_item: media_item} do
+      Settings.set(download_backoff_enabled: true)
+      Settings.set(download_backoff_threshold: 1)
+
+      expect(YtDlpRunnerMock, :run, 2, fn
+        _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}
+        _url, :download, _opts, _ot, _addl -> {:error, "some other problem", 1}
+      end)
+
+      perform_job(MediaDownloadWorker, %{id: media_item.id, quality_upgrade?: true})
+
+      refute Settings.get!(:download_backoff_paused_until)
+    end
+
     test "does not set the job to retryable if the video is age-restricted", %{media_item: media_item} do
       expect(YtDlpRunnerMock, :run, 2, fn
         _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}

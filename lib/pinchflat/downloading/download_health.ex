@@ -28,6 +28,16 @@ defmodule Pinchflat.Downloading.DownloadHealth do
   @throttle_error "Sign in to confirm you're not a bot"
 
   @doc """
+  The message YouTube returns when it is throttling the address rather than refusing the
+  video. Exposed so the worker and the backoff match on the same string as the counting
+  does - three copies of it would drift, and a backoff that triggers on a message the
+  health summary does not count would be untestable.
+
+  Returns binary()
+  """
+  def throttle_error, do: @throttle_error
+
+  @doc """
   A snapshot of whether downloads are getting through.
 
   Returns map()
@@ -45,7 +55,10 @@ defmodule Pinchflat.Downloading.DownloadHealth do
       set_aside_without_reason: set_aside_without_reason_count(),
       yt_dlp_version: Settings.get!(:yt_dlp_version),
       yt_dlp_last_update_attempted_at: Settings.get!(:yt_dlp_last_update_attempted_at),
-      yt_dlp_last_update_error: Settings.get!(:yt_dlp_last_update_error)
+      yt_dlp_last_update_error: Settings.get!(:yt_dlp_last_update_error),
+      # nil unless the yt-dlp queues are currently stopped. The one field here that says
+      # "nothing is downloading and that is on purpose".
+      queues_paused_until: Settings.get!(:download_backoff_paused_until)
     }
   end
 
