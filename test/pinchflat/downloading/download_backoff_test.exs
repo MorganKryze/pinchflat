@@ -47,6 +47,26 @@ defmodule Pinchflat.Downloading.DownloadBackoffTest do
       assert DownloadBackoff.paused_until()
     end
 
+    test "scatters the pause instead of ending it on the same offset every time" do
+      Settings.set(download_backoff_minutes: 60)
+
+      lengths =
+        Enum.map(1..12, fn _ ->
+          Settings.set(download_backoff_paused_until: nil)
+          for _ <- 1..3, do: throttled(1)
+
+          {:paused, until} = DownloadBackoff.maybe_pause()
+          DateTime.diff(until, DateTime.utc_now())
+        end)
+
+      # During a block the probe at the end of each pause is the only traffic leaving this
+      # address, so a run of pauses exactly an hour apart is the easiest thing there is to
+      # recognise. A fifth either way, and never the same twice.
+      assert Enum.uniq(lengths) != [3600]
+      assert Enum.min(lengths) >= 2880
+      assert Enum.max(lengths) <= 4320
+    end
+
     test "does not pause if anything is still succeeding" do
       for _ <- 1..5, do: throttled(1)
       media_item_fixture(%{media_downloaded_at: DateTime.utc_now()})

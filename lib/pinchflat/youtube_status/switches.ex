@@ -13,11 +13,16 @@ defmodule Pinchflat.YoutubeStatus.Switches do
   nothing to say they were ever stopped, which has already caused one silent failure in
   this codebase. The setting is the record; the pause is its effect, re-applied on boot.
 
-  ## What is not covered
+  ## Radio silence
 
-  `remote_metadata` keeps running. It refreshes a source's own details rather than listing
-  or fetching media, and neither switch claims to stop it. The automatic backoff does stop
-  it, because that one is about not touching a refused address at all.
+  Stopping both stops every queue that reaches YouTube, and the backoff's probe with them:
+  there is nothing left for it to start, so asking whether the block has cleared would be
+  a request whose answer cannot change anything.
+
+  That is the reason `remote_metadata` sits under indexing rather than outside both. It
+  refreshes a source's own details rather than listing or fetching media, so on its own it
+  belongs to neither - but leaving it out meant an operator who had stopped everything was
+  still talking to YouTube, and "stopped everything" has to mean it.
   """
 
   require Logger
@@ -25,7 +30,7 @@ defmodule Pinchflat.YoutubeStatus.Switches do
   alias Pinchflat.Settings
 
   @switches %{
-    indexing: %{setting: :indexing_paused, queues: ~w(fast_indexing media_collection_indexing)a},
+    indexing: %{setting: :indexing_paused, queues: ~w(fast_indexing media_collection_indexing remote_metadata)a},
     downloading: %{setting: :downloading_paused, queues: ~w(media_fetching)a}
   }
 

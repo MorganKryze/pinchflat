@@ -41,10 +41,22 @@ defmodule Pinchflat.YoutubeStatus.SwitchesTest do
       assert Switches.paused_queues() == []
     end
 
-    test "names both indexing queues" do
+    test "names every queue that reads from YouTube on behalf of a source" do
       Switches.set(:indexing, true)
 
-      assert Enum.sort(Switches.paused_queues()) == [:fast_indexing, :media_collection_indexing]
+      # `remote_metadata` is in here so that stopping both switches means silence. On its
+      # own it is neither indexing nor downloading, but leaving it out left an operator who
+      # had stopped everything still talking to YouTube.
+      assert Enum.sort(Switches.paused_queues()) ==
+               [:fast_indexing, :media_collection_indexing, :remote_metadata]
+    end
+
+    test "stopping both holds every queue the backoff covers" do
+      Switches.set(:indexing, true)
+      Switches.set(:downloading, true)
+
+      assert Enum.sort(Switches.paused_queues()) == Enum.sort(DownloadBackoff.yt_dlp_queues())
+      assert DownloadBackoff.resumable_queues() == []
     end
   end
 

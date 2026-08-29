@@ -4,6 +4,7 @@ defmodule Pinchflat.Downloading.ResumeQueuesWorkerTest do
   import Pinchflat.MediaFixtures
 
   alias Pinchflat.Settings
+  alias Pinchflat.YoutubeStatus.Switches
   alias Pinchflat.Downloading.DownloadBackoff
   alias Pinchflat.Downloading.ResumeQueuesWorker
 
@@ -71,6 +72,19 @@ defmodule Pinchflat.Downloading.ResumeQueuesWorkerTest do
       # The worker schedules its own successor. If its uniqueness counted the running job
       # the insert would be a silent no-op and the queues would stay stopped for good.
       assert_enqueued(worker: ResumeQueuesWorker)
+    end
+
+    test "asks nothing while everything is stopped by hand" do
+      paused_until(-1)
+      media_item_fixture(%{media_downloaded_at: DateTime.utc_now() |> DateTime.truncate(:second)})
+      Switches.set(:indexing, true)
+      Switches.set(:downloading, true)
+
+      # No expectation on the runner: a probe here would be a request whose answer cannot
+      # change anything, and during a block it would be the only traffic leaving this
+      # address. Stopping both switches has to mean silence.
+      assert :ok = perform_job(ResumeQueuesWorker, %{})
+      assert DownloadBackoff.paused_until() == nil
     end
 
     test "lifts the pause when there is nothing to ask about" do

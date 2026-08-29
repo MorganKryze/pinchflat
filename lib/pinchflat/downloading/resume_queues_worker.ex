@@ -50,6 +50,20 @@ defmodule Pinchflat.Downloading.ResumeQueuesWorker do
   # stopped because the library is empty, or because the one video the probe picked was
   # deleted, is worse than resuming into a block that will simply pause again.
   defp resume_if_answered do
+    if DownloadBackoff.resumable_queues() == [] do
+      # Every queue this pause covers is also held by a switch. Asking YouTube whether the
+      # block has cleared would be a request whose answer cannot change anything, and
+      # during a block it would be the only traffic leaving this address. Stopping both
+      # switches has to mean silence.
+      Logger.info("Everything is stopped by hand: not probing, and lifting the backoff it would have lifted")
+
+      DownloadBackoff.resume()
+    else
+      probe_and_decide()
+    end
+  end
+
+  defp probe_and_decide do
     case Probe.run() do
       :ok ->
         Logger.info("YouTube answered: lifting the backoff early")

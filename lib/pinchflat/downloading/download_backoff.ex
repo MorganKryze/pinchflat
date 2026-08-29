@@ -123,7 +123,8 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
 
   # The window and the pause are the same length on purpose: "if the last thirty minutes
   # were nothing but refusals, stop for thirty minutes" is one number to reason about
-  # instead of two that have to be kept consistent with each other.
+  # instead of two that have to be kept consistent with each other. The pause is then
+  # scattered around it - see `jittered_seconds/1`.
   defp threshold_met? do
     minutes = Settings.get!(:download_backoff_minutes)
     since = DateTime.add(DateTime.utc_now(), -minutes, :minute)
@@ -134,14 +135,28 @@ defmodule Pinchflat.Downloading.DownloadBackoff do
 
   defp pause do
     minutes = Settings.get!(:download_backoff_minutes)
-    until = DateTime.utc_now() |> DateTime.add(minutes, :minute) |> DateTime.truncate(:second)
+    until = DateTime.utc_now() |> DateTime.add(jittered_seconds(minutes), :second) |> DateTime.truncate(:second)
 
     Enum.each(@yt_dlp_queues, &Oban.pause_queue(queue: &1))
     Settings.set(download_backoff_paused_until: until)
     ResumeQueuesWorker.schedule_for(until)
 
-    Logger.warning("Throttled by YouTube: pausing yt-dlp queues for #{minutes} minutes, until #{until}")
+    Logger.warning("Throttled by YouTube: pausing yt-dlp queues until #{until}")
 
     {:paused, until}
+  end
+
+  # A fifth either way, so a pause never ends on the same offset twice.
+  #
+  # Nothing depends on the exact minute, and a run of pauses that end exactly thirty
+  # minutes apart is the cheapest thing in the world to recognise. It matters more here
+  # than anywhere else in this codebase: during a block the probe at the end of each pause
+  # is the only traffic leaving this address, so there is nothing for its regularity to
+  # hide in. The retry backoff already scatters itself for the same reason.
+  #
+  # This removes a tell. It does not make anything look human, and a request every half
+  # hour from an otherwise silent address is still a request every half hour.
+  defp jittered_seconds(minutes) do
+    trunc(minutes * 60 * (0.8 + :rand.uniform() * 0.4))
   end
 end
