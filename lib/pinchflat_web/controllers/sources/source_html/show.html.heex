@@ -59,6 +59,13 @@
           session: %{"source_id" => @source.id, "media_state" => "other"}
         )}
       </:tab>
+      <:tab title="Errors" id="errors">
+        {live_render(
+          @conn,
+          PinchflatWeb.Sources.MediaItemTableLive,
+          session: %{"source_id" => @source.id, "media_state" => "errored"}
+        )}
+      </:tab>
       <:tab title="Tasks" id="tasks">
         <%= if match?([_|_], @pending_tasks) do %>
           <.table rows={@pending_tasks} table_class="text-black dark:text-white">

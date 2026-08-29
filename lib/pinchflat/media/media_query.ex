@@ -34,6 +34,10 @@ defmodule Pinchflat.Media.MediaQuery do
   def download_prevented, do: dynamic([mi], mi.prevent_download == true)
   def culling_prevented, do: dynamic([mi], mi.prevent_culling == true)
   def redownloaded, do: dynamic([mi], not is_nil(mi.media_redownloaded_at))
+  # Anything carrying a failure, whatever became of it afterwards. Deliberately not
+  # "pending and failed": a media item can fail, be set aside, and still be the thing
+  # someone is looking for when they ask what went wrong.
+  def errored, do: dynamic([mi], not is_nil(mi.last_error))
   def upload_date_matches(other_date), do: dynamic([mi], fragment("date(?) = date(?)", mi.uploaded_at, ^other_date))
 
   def upload_date_after_source_cutoff do

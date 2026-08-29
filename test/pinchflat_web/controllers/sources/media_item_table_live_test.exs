@@ -69,6 +69,62 @@ defmodule PinchflatWeb.Sources.MediaItemTableLiveTest do
       refute html =~ pending_media_item.title
     end
 
+    test "lists everything carrying a failure", %{conn: conn, source: source} do
+      failed =
+        media_item_fixture(
+          source_id: source.id,
+          media_filepath: nil,
+          last_error: "HTTP Error 500",
+          last_error_at: DateTime.utc_now()
+        )
+
+      fine = media_item_fixture(source_id: source.id, media_filepath: nil)
+
+      {:ok, _view, html} = live_isolated(conn, MediaItemTableLive, session: create_session(source, "errored"))
+
+      assert html =~ failed.title
+      refute html =~ fine.title
+    end
+
+    test "includes a failure that was then set aside", %{conn: conn, source: source} do
+      # Not "pending and failed": something can fail, be set aside, and still be exactly
+      # what someone is looking for when they ask what went wrong.
+      set_aside =
+        media_item_fixture(
+          source_id: source.id,
+          media_filepath: nil,
+          prevent_download: true,
+          last_error: "HTTP Error 500",
+          last_error_at: DateTime.utc_now()
+        )
+
+      {:ok, _view, html} = live_isolated(conn, MediaItemTableLive, session: create_session(source, "errored"))
+
+      assert html =~ set_aside.title
+    end
+
+    test "puts the most recent failure first", %{conn: conn, source: source} do
+      old =
+        media_item_fixture(
+          source_id: source.id,
+          media_filepath: nil,
+          last_error: "old failure",
+          last_error_at: DateTime.utc_now() |> DateTime.add(-2, :day) |> DateTime.truncate(:second)
+        )
+
+      recent =
+        media_item_fixture(
+          source_id: source.id,
+          media_filepath: nil,
+          last_error: "recent failure",
+          last_error_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      {:ok, _view, html} = live_isolated(conn, MediaItemTableLive, session: create_session(source, "errored"))
+
+      assert :binary.match(html, recent.title) < :binary.match(html, old.title)
+    end
+
     test "shows the ignored column when other", %{conn: conn, source: source} do
       _media_item = media_item_fixture(source_id: source.id, prevent_download: true, media_filepath: nil)
 

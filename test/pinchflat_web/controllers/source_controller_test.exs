@@ -98,6 +98,18 @@ defmodule PinchflatWeb.SourceControllerTest do
     end
   end
 
+  describe "show source" do
+    test "offers a tab for everything that failed", %{conn: conn} do
+      source = source_fixture()
+
+      conn = get(conn, ~p"/sources/#{source.id}")
+
+      # Pending / Downloaded / Other could not answer "what went wrong", which on a large
+      # library is the first thing anyone wants to ask.
+      assert html_response(conn, 200) =~ "Errors"
+    end
+  end
+
   describe "edit source" do
     setup [:create_source]
 

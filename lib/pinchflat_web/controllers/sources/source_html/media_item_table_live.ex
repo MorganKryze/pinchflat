@@ -64,7 +64,7 @@ defmodule PinchflatWeb.Sources.MediaItemTableLive do
             </span>
           </section>
         </:col>
-        <:col :let={media_item} :if={@media_state == "other"} label="Ignored?">
+        <:col :let={media_item} :if={@media_state in ["other", "errored"]} label="Ignored?">
           <%!-- Not always manual: a user script can set this too, and when it does the
                 reason is the only thing that explains a media item nothing will retry. --%>
           <.tooltip
@@ -209,6 +209,13 @@ defmodule PinchflatWeb.Sources.MediaItemTableLive do
     MediaQuery.new()
     |> select(^select_fields())
     |> where(^dynamic(^MediaQuery.for_source(source) and ^MediaQuery.downloaded()))
+  end
+
+  defp generate_base_query(source, "errored") do
+    MediaQuery.new()
+    |> select(^select_fields())
+    |> where(^dynamic(^MediaQuery.for_source(source) and ^MediaQuery.errored()))
+    |> order_by([mi], desc: mi.last_error_at)
   end
 
   defp generate_base_query(source, "other") do
