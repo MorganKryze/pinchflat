@@ -12,6 +12,7 @@ defmodule Pinchflat.Downloading.MediaDownloader do
   alias Pinchflat.Sources
   alias Pinchflat.Media.MediaItem
   alias Pinchflat.Utils.StringUtils
+  alias Pinchflat.Downloading.DownloadErrors
   alias Pinchflat.Metadata.NfoBuilder
   alias Pinchflat.Metadata.MetadataParser
   alias Pinchflat.Metadata.MetadataFileHelpers
@@ -194,7 +195,7 @@ defmodule Pinchflat.Downloading.MediaDownloader do
   defp maybe_retry_with_cookies(url, item_with_preloads, output_filepath, override_opts, err) do
     {:error, message, _} = err
     source = item_with_preloads.source
-    message_contains_cookie_error = String.contains?(to_string(message), recoverable_cookie_errors())
+    message_contains_cookie_error = DownloadErrors.fixable_with_cookies?(message)
 
     if Sources.use_cookies?(source, :error_recovery) && message_contains_cookie_error do
       download_with_options(
@@ -211,18 +212,6 @@ defmodule Pinchflat.Downloading.MediaDownloader do
   defp recoverable_errors do
     [
       "Unable to communicate with SponsorBlock"
-    ]
-  end
-
-  defp recoverable_cookie_errors do
-    # Same split as `action_on_error/1` in MediaDownloadWorker, and it matters more here:
-    # matching the prefix meant an IP throttle ("you're not a bot") triggered a second
-    # yt-dlp call carrying the user's cookies against an IP that is already being
-    # refused. Cookies cannot lift an IP throttle, so the retry only doubled the requests
-    # spent during the block and presented an account's session at the worst moment.
-    [
-      "Sign in to confirm your age",
-      "This video is available to this channel's members"
     ]
   end
 end

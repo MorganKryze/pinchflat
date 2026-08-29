@@ -16,7 +16,7 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   alias Pinchflat.Media
   alias Pinchflat.Media.FileSyncing
   alias Pinchflat.Downloading.MediaDownloader
-  alias Pinchflat.Downloading.DownloadHealth
+  alias Pinchflat.Downloading.DownloadErrors
   alias Pinchflat.Downloading.DownloadBackoff
 
   alias Pinchflat.Lifecycle.UserScripts.CommandRunner, as: UserScriptRunner
@@ -174,28 +174,14 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   defp action_on_error(message) do
     # This will attempt re-download at the next indexing, but it won't be retried
     # immediately as part of job failure logic
-    #
-    # NOTE: "Sign in to confirm" is deliberately not matched as a prefix. It covers two
-    # opposite situations. "Sign in to confirm your age" needs the cookies of a verified
-    # account and will never succeed without them, so it belongs here. "Sign in to confirm
-    # you're not a bot" is an IP throttle that clears on its own within hours, and treating
-    # it as final is what leaves media items carrying an error with no job left to retry
-    # them: the worker returns {:ok, :non_retry}, so Oban records the job as a success and
-    # nothing ever reconsiders the item until the next index.
-    non_retryable_errors = [
-      "Video unavailable",
-      "Sign in to confirm your age",
-      "This video is available to this channel's members"
-    ]
-
-    if String.contains?(to_string(message), non_retryable_errors) do
-      Logger.error("yt-dlp download will not be retried: #{inspect(message)}")
-
-      {:ok, :non_retry}
-    else
+    if DownloadErrors.retryable?(message) do
       maybe_back_off(message)
 
       {:error, :download_failed}
+    else
+      Logger.error("yt-dlp download will not be retried: #{inspect(message)}")
+
+      {:ok, :non_retry}
     end
   end
 
@@ -206,7 +192,7 @@ defmodule Pinchflat.Downloading.MediaDownloadWorker do
   # Checked here rather than by something watching from outside because this is already
   # the moment the refusal arrives - nothing has to wake up and go looking for it.
   defp maybe_back_off(message) do
-    if String.contains?(to_string(message), DownloadHealth.throttle_error()) do
+    if DownloadErrors.throttled?(message) do
       DownloadBackoff.maybe_pause()
     end
   end

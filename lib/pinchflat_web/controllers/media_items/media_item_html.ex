@@ -22,4 +22,9 @@ defmodule PinchflatWeb.MediaItems.MediaItemHTML do
       _ -> :unknown
     end
   end
+
+  @doc """
+  The short name for a yt-dlp failure, or nil if it is not one we recognise.
+  """
+  def error_label(message), do: Pinchflat.Downloading.DownloadErrors.label(message)
 end

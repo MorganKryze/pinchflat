@@ -17,25 +17,23 @@ defmodule Pinchflat.Downloading.DownloadHealth do
   alias Pinchflat.Tasks.Task
   alias Pinchflat.Media.MediaItem
   alias Pinchflat.Settings
+  alias Pinchflat.Downloading.DownloadErrors
 
   # Oban states in which a job will still run. Anything else - completed, discarded,
   # cancelled - means nothing is going to pick that media item up again on its own.
   @live_job_states ~w(available scheduled executing retryable)
 
-  # The message YouTube returns when it is throttling the IP rather than refusing the
-  # video. Counted separately because it is the only failure that says "stop asking":
-  # every other kind is worth retrying immediately, this one is worth waiting out.
-  @throttle_error "Sign in to confirm you're not a bot"
+  # Counted separately because it is the only failure that says "stop asking": every
+  # other kind is worth retrying immediately, this one is worth waiting out. The pattern
+  # comes from DownloadErrors so the count and the behaviour cannot disagree about what a
+  # throttle is - this one matches in SQL, so it needs the string rather than classify/1.
 
   @doc """
-  The message YouTube returns when it is throttling the address rather than refusing the
-  video. Exposed so the worker and the backoff match on the same string as the counting
-  does - three copies of it would drift, and a backoff that triggers on a message the
-  health summary does not count would be untestable.
+  The message a throttle carries, for the callers that match in SQL.
 
   Returns binary()
   """
-  def throttle_error, do: @throttle_error
+  def throttle_error, do: DownloadErrors.throttle_pattern()
 
   @doc """
   A snapshot of whether downloads are getting through.
@@ -91,7 +89,7 @@ defmodule Pinchflat.Downloading.DownloadHealth do
   """
   def throttle_failures_since(%DateTime{} = since) do
     MediaItem
-    |> where([mi], mi.last_error_at >= ^since and like(mi.last_error, ^"%#{@throttle_error}%"))
+    |> where([mi], mi.last_error_at >= ^since and like(mi.last_error, ^"%#{DownloadErrors.throttle_pattern()}%"))
     |> Repo.aggregate(:count)
   end
 

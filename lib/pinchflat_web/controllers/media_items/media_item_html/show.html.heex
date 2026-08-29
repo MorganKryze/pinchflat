@@ -36,12 +36,17 @@
           <section :if={@media_item.last_error} class="mt-6">
             <div class="flex items-center gap-1 mb-2">
               <.icon name="hero-exclamation-circle-solid" class="text-red-500" />
-              <h3 class="font-bold text-xl">Last Error</h3>
+              <h3 class="font-bold text-xl">
+                {error_label(@media_item.last_error) || "Last Error"}
+              </h3>
               <span :if={@media_item.last_error_at} class="text-bodydark">
                 (<.time_ago datetime={@media_item.last_error_at} />)
               </span>
             </div>
-            <span>{@media_item.last_error}</span>
+            <%!-- The raw text stays. The label is what to read first, not a replacement:
+                  yt-dlp says things this does not classify, and the detail page is where
+                  someone comes when the short version was not enough. --%>
+            <span class="text-bodydark text-sm">{@media_item.last_error}</span>
           </section>
 
           <%= if media_file_exists?(@media_item) do %>

@@ -15,6 +15,34 @@ defmodule PinchflatWeb.MediaItemControllerTest do
       assert html_response(conn, 200) =~ "#{media_item.title}"
     end
 
+    test "leads with a readable name for a known failure", %{conn: conn} do
+      media_item =
+        media_item_fixture(%{
+          last_error:
+            "ERROR: [youtube] abc: Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies",
+          last_error_at: DateTime.utc_now()
+        })
+
+      conn = get(conn, ~p"/sources/#{media_item.source_id}/media/#{media_item}")
+      html = html_response(conn, 200)
+
+      # The raw text stays on the page - it is where someone comes when the short version
+      # was not enough - but it is not the first thing they read.
+      assert html =~ "Throttled by YouTube"
+      assert html =~ "--cookies-from-browser"
+    end
+
+    test "falls back to the raw message for a failure it does not know", %{conn: conn} do
+      media_item = media_item_fixture(%{last_error: "HTTP Error 500", last_error_at: DateTime.utc_now()})
+
+      conn = get(conn, ~p"/sources/#{media_item.source_id}/media/#{media_item}")
+      html = html_response(conn, 200)
+
+      # No invented label: an honest "Last Error" beats a category nothing established.
+      assert html =~ "Last Error"
+      assert html =~ "HTTP Error 500"
+    end
+
     test "shows why a media item is being skipped", %{conn: conn} do
       media_item =
         media_item_fixture(%{prevent_download: true, blocked_reason: "Blocked by a user script (exit code 3)"})
