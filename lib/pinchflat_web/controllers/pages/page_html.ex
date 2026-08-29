@@ -39,6 +39,32 @@ defmodule PinchflatWeb.Pages.PageHTML do
   end
 
   @doc """
+  The name of a range, as a tab reads it.
+
+  Returns binary()
+  """
+  def range_label(range), do: range |> to_string() |> String.capitalize()
+
+  @doc """
+  How far back a range reaches, in words.
+
+  Returns binary()
+  """
+  def range_span(:hour), do: "hour"
+  def range_span(:day), do: "24 hours"
+  def range_span(:week), do: "7 days"
+  def range_span(:month), do: "30 days"
+
+  @doc """
+  The same span as the far end of the bar reads it. "Last hour" is right above the bar and
+  "hour ago" underneath it is not.
+
+  Returns binary()
+  """
+  def range_ago(:hour), do: "1 hour ago"
+  def range_ago(range), do: "#{range_span(range)} ago"
+
+  @doc """
   What one segment of the history bar covers.
 
   Returns binary()
@@ -89,7 +115,9 @@ defmodule PinchflatWeb.Pages.PageHTML do
   def status_colour(:nominal), do: "bg-meta-3"
   def status_colour(:degraded), do: "bg-meta-8"
   def status_colour(:blocked), do: "bg-meta-1"
-  def status_colour(:idle), do: "bg-meta-4"
+  # A mid grey rather than one of the theme's near-black tones. Idle and no_data are
+  # different facts and both were dark enough to read as the same absence.
+  def status_colour(:idle), do: "bg-slate-600"
   def status_colour(:disabled), do: "bg-meta-5"
   def status_colour(:no_data), do: "bg-boxdark-2"
 
@@ -115,9 +143,12 @@ defmodule PinchflatWeb.Pages.PageHTML do
     end
   end
 
+  # A time with no date is ambiguous the moment a segment covers more than a day, which is
+  # every segment on the week and month views.
   defp bucket_time(bucket) do
     timezone = Application.get_env(:pinchflat, :timezone)
+    format = if DateTime.diff(bucket.to, bucket.from) < 86_400, do: "%d %b, %H:%M", else: "%d %b"
 
-    Calendar.strftime(Timex.Timezone.convert(bucket.from, timezone), "%H:%M")
+    Calendar.strftime(Timex.Timezone.convert(bucket.from, timezone), format)
   end
 end

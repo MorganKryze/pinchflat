@@ -173,6 +173,23 @@ defmodule Pinchflat.YoutubeStatusTest do
     end
   end
 
+  describe "history_buckets_for/1" do
+    test "every range is drawn from buckets no narrower than a sample" do
+      # A bucket narrower than the sampling interval would be empty by construction and
+      # draw a working instance as a row of gaps.
+      for range <- YoutubeStatus.ranges() do
+        [bucket | _] = YoutubeStatus.history_buckets_for(range)
+        width = DateTime.diff(bucket.to, bucket.from)
+
+        assert width >= YoutubeStatus.interval_seconds(), "#{range} buckets are #{width}s wide"
+      end
+    end
+
+    test "a month reaches no further back than the samples are kept" do
+      assert YoutubeStatus.range_hours(:month) == 30 * 24
+    end
+  end
+
   describe "the disabled reading" do
     test "explains quiet that somebody asked for" do
       Switches.set(:downloading, true)

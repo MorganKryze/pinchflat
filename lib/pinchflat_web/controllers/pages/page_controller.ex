@@ -25,6 +25,10 @@ defmodule PinchflatWeb.Pages.PageController do
   @switch_actions %{"pause" => true, "resume" => false}
   @switch_labels %{indexing: "Indexing", downloading: "Downloading"}
 
+  # Same reason as the switches: a query string is user input, so it is mapped to a known
+  # range rather than converted to whatever atom it spells.
+  @range_names %{"hour" => :hour, "day" => :day, "week" => :week, "month" => :month}
+
   def home(conn, params) do
     done_onboarding = params["onboarding"] == "0"
     force_onboarding = params["onboarding"] == "1"
@@ -38,10 +42,16 @@ defmodule PinchflatWeb.Pages.PageController do
     end
   end
 
-  def youtube_status(conn, _params) do
+  def youtube_status(conn, params) do
+    range = Map.get(@range_names, params["range"], :day)
+
     render(conn, :youtube_status,
+      # The headline reads an hour whatever the history is set to. It answers "what is
+      # happening now", and a month of averages answers something else.
       current: YoutubeStatus.current(),
-      buckets: YoutubeStatus.history_buckets(),
+      range: range,
+      ranges: YoutubeStatus.ranges(),
+      buckets: YoutubeStatus.history_buckets_for(range),
       health: DownloadHealth.summary(24),
       switches: switch_states(),
       legend: @legend

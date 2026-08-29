@@ -20,6 +20,19 @@ defmodule PinchflatWeb.PageControllerTest do
       refute response =~ "YouTube is refusing this address"
     end
 
+    test "reads a day unless asked otherwise", %{conn: conn} do
+      assert html_response(get(conn, ~p"/youtube_status"), 200) =~ "Last 24 hours"
+    end
+
+    test "switches the history to another span", %{conn: conn} do
+      assert html_response(get(conn, ~p"/youtube_status?range=week"), 200) =~ "Last 7 days"
+      assert html_response(get(conn, ~p"/youtube_status?range=month"), 200) =~ "Last 30 days"
+    end
+
+    test "falls back to a day on a range nobody defined", %{conn: conn} do
+      assert html_response(get(conn, ~p"/youtube_status?range=decade"), 200) =~ "Last 24 hours"
+    end
+
     test "reads green once a download has got through", %{conn: conn} do
       media_item_fixture(%{
         media_downloaded_at: DateTime.utc_now() |> DateTime.add(-5, :minute) |> DateTime.truncate(:second)

@@ -154,6 +154,41 @@ defmodule Pinchflat.YoutubeStatus do
     Map.merge(counts, %{state: reading(counts), since: since, until: now})
   end
 
+  # Each range gets a bucket at least as wide as the sampling interval, so a segment is
+  # never narrower than the thing it is drawn from. A month is thirty days because that is
+  # the retention: asking for more would draw a fortnight of no_data every time.
+  @ranges [
+    hour: %{hours: 1, buckets: 12},
+    day: %{hours: 24, buckets: 96},
+    week: %{hours: 168, buckets: 84},
+    month: %{hours: 720, buckets: 90}
+  ]
+
+  @doc """
+  The spans the history can be read over, shortest first.
+
+  Returns [atom()]
+  """
+  def ranges, do: Keyword.keys(@ranges)
+
+  @doc """
+  How many hours a range covers.
+
+  Returns integer()
+  """
+  def range_hours(range), do: @ranges[range].hours
+
+  @doc """
+  The history over one of the named ranges.
+
+  Returns [map()]
+  """
+  def history_buckets_for(range) do
+    %{hours: hours, buckets: buckets} = @ranges[range]
+
+    history_buckets(hours, buckets)
+  end
+
   @doc """
   The history as a fixed row of equal time buckets, oldest first.
 
