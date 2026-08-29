@@ -8,17 +8,17 @@ on:
     # most of those rebases touch nothing this job can judge; without a filter
     # each one pays for a full image build plus the suite.
     paths:
-      - "lib/**"
-      - "test/**"
-      - "config/**"
-      - "priv/**"
-      - "assets/**"
-      - "tooling/**"
-      - "docker/**"
-      - "mix.exs"
-      - "mix.lock"
-      - "docker-compose.ci.yml"
-      - ".github/workflows/lint_and_test.yml"
+      - 'lib/**'
+      - 'test/**'
+      - 'config/**'
+      - 'priv/**'
+      - 'assets/**'
+      - 'tooling/**'
+      - 'docker/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'docker-compose.ci.yml'
+      - '.github/workflows/lint_and_test.yml'
   # No paths filter here on purpose: this is a required check, and a required
   # check that never runs leaves a docs-only pull request waiting forever.
   pull_request:
