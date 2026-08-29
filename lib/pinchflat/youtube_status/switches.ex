@@ -72,13 +72,19 @@ defmodule Pinchflat.YoutubeStatus.Switches do
   Called after the job runner starts, because a restart wipes Oban's pauses and the
   operator's decision should outlive a container.
 
+  Confirmed rather than assumed. A pause is a broadcast, and a producer that has not
+  finished subscribing when it goes out never hears it - which would leave a queue
+  somebody stopped quietly running, with the setting still claiming otherwise. That is the
+  exact shape of the bug this fork exists to fix, so it is checked rather than hoped for.
+
   Returns :ok
   """
   def apply_stored do
     Enum.each(names(), fn switch ->
       if paused?(switch) do
         Logger.info("Re-applying the #{switch} pause after a restart")
-        apply_to_queues(@switches[switch].queues, true)
+
+        Enum.each(@switches[switch].queues, &pause_and_confirm/1)
       end
     end)
   end
@@ -99,4 +105,48 @@ defmodule Pinchflat.YoutubeStatus.Switches do
 
   defp apply_to_queues(queues, true), do: Enum.each(queues, &Oban.pause_queue(queue: &1))
   defp apply_to_queues(queues, false), do: Enum.each(queues, &Oban.resume_queue(queue: &1))
+
+  # Twenty tries, twenty milliseconds apart. It lands first time whenever the producer is
+  # already listening, which is nearly always; the rest is there for the boot where it is
+  # not.
+  @confirm_attempts 20
+  @confirm_wait_ms 20
+
+  defp pause_and_confirm(queue) do
+    Oban.pause_queue(queue: queue)
+
+    # Nothing to confirm against when no queues are running at all, which is how the test
+    # environment is set up.
+    if queue_configured?(queue), do: confirm_paused(queue, @confirm_attempts), else: :ok
+  end
+
+  defp confirm_paused(queue, 0) do
+    Logger.error("Could not confirm that the #{queue} queue is paused - it may be running")
+  end
+
+  defp confirm_paused(queue, attempts) do
+    case queue_state(queue) do
+      %{paused: true} ->
+        :ok
+
+      _ ->
+        Process.sleep(@confirm_wait_ms)
+        Oban.pause_queue(queue: queue)
+        confirm_paused(queue, attempts - 1)
+    end
+  end
+
+  defp queue_configured?(queue) do
+    Keyword.has_key?(Oban.config().queues, queue)
+  rescue
+    _ -> false
+  end
+
+  defp queue_state(queue) do
+    Oban.check_queue(queue: queue)
+  rescue
+    _ -> nil
+  catch
+    :exit, _ -> nil
+  end
 end
