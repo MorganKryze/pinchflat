@@ -50,9 +50,15 @@ development has been paused since roughly the start of 2026, so nothing here wai
 | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tell an IP throttle apart from an age restriction ([`88c9031`](https://github.com/MorganKryze/pinchflat/commit/88c9031)) | `"Sign in to confirm"` was matched as a prefix, and it covers two opposite messages. `…your age` is permanent; `…you're not a bot` is a throttle that clears within hours. Both were abandoned, and abandoning returned `{:ok, :non_retry}`, so Oban recorded a success and no job was left to retry the item. Measured: **857 media items carrying that error with zero jobs between them**. Retries are now bounded to 5 attempts and spread over ~3 hours, so they outlast a throttle window instead of being spent inside it. |
 | Rescue download jobs orphaned by a restart ([`11dc963`](https://github.com/MorganKryze/pinchflat/commit/11dc963))        | `Oban.Plugins.Lifeline` was never enabled. A job left `executing` when the container dies stays there forever, and the download worker's uniqueness covers `:executing`, so no replacement job can be created for that media item either — it is frozen for good, silently. Rescued after 2 hours, chosen so a slow download is never mistaken for a dead node.                                                                                                                                                                   |
+| Write the NFO air date as a date, not a datetime ([`2c706ee`](https://github.com/MorganKryze/pinchflat/commit/2c706ee))  | `<aired>` carried a full DateTime, and Jellyfin matches that field against its `ReleaseDateFormat` setting — `yyyy-MM-dd` by default, and an exact match at that. The string never matched: **0 of 247 episodes had an air date**. Everything else in the NFO was correct, so nothing pointed at the file. Fixing it and rescanning gave 321 of 321.                                                                                                                                                                              |
+| Make the production image buildable again ([`1424c22`](https://github.com/MorganKryze/pinchflat/commit/1424c22))         | `selfhosted.Dockerfile` pinned ffmpeg to a 2024 autobuild. Those get pruned, the URL now 404s, and **the image could not be built from source by anyone**. `curl` without `-f` wrote the 404 page into the archive and exited 0, so the build died further down in `tar` looking like a corrupt download. Now reads the `latest` release, which is what `dev.Dockerfile` already did.                                                                                                                                             |
 | Publish under this account, and prove it ([`4332bba`](https://github.com/MorganKryze/pinchflat/commit/4332bba))          | Upstream's release workflow hardcodes its own registries. Rebuilt for GHCR only: actions pinned to commits with Dependabot behind them, the buildkit builder pinned by digest and watched weekly, tests gating the push on the same ref, and images signed with cosign, with SLSA provenance and an SBOM attached. `stable` and `latest` only move onto a digest whose signature has been verified.                                                                                                                               |
 
-Verify an image before running it:
+Tagged releases are signed and carry `stable`, `latest` and their version number. Builds cut from
+`master` by hand are tagged `dev` and by commit sha, and are **not** signed - they are whatever
+`master` is that minute, not something anyone is asked to trust.
+
+Verify a release before running it:
 
 ```bash
 cosign verify ghcr.io/morgankryze/pinchflat:stable \
@@ -63,9 +69,9 @@ cosign verify ghcr.io/morgankryze/pinchflat:stable \
 ### Still on the list
 
 Reading the yt-dlp self-update result instead of discarding it, a recorded reason whenever a media
-item is set aside, an error timestamp so the UI stops showing week-old messages as current, NFO
-dates in a format Jellyfin actually parses, a backoff that pauses all four yt-dlp queues during a
-block, and a health endpoint that makes any of this visible without opening the database.
+item is set aside, an error timestamp so the UI stops showing week-old messages as current, a
+backoff that pauses all four yt-dlp queues during a block, and a health endpoint that makes any of
+this visible without opening the database.
 
 ### AI disclosure
 
