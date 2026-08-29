@@ -1,4 +1,4 @@
-<div class="grid grid-cols-1 gap-4 md:grid-cols-4">
+<div class="grid grid-cols-1 gap-4 md:grid-cols-5">
   <div class="flex flex-col justify-center rounded-sm border px-7.5 py-6 shadow-default border-strokedark bg-boxdark">
     <a href={~p"/media_profiles"} class="flex flex-col items-center py-2">
       <span class="text-md font-medium">
@@ -37,6 +37,20 @@
       </h4>
     </span>
   </div>
+
+  <%!-- Last, and only coloured when it is not zero: a dashboard that shouts at an
+        instance with nothing wrong teaches people to ignore it. --%>
+  <div class={[
+    "flex flex-col justify-center rounded-sm border px-7.5 py-6 shadow-default bg-boxdark",
+    if(@errored_count > 0, do: "border-red-500", else: "border-strokedark")
+  ]}>
+    <a href="#tab-errors" class="flex flex-col items-center py-2">
+      <span class="text-md font-medium">Needs Attention</span>
+      <h4 class={["text-title-md font-bold", if(@errored_count > 0, do: "text-red-500", else: "text-white")]}>
+        <.localized_number number={@errored_count} />
+      </h4>
+    </a>
+  </div>
 </div>
 
 <div class="rounded-sm border shadow-default border-strokedark bg-boxdark mt-4 p-5">
@@ -54,6 +68,13 @@
         @conn,
         Pinchflat.Pages.HistoryTableLive,
         session: %{"media_state" => "pending"}
+      )}
+    </:tab>
+    <:tab title="Errors" id="errors">
+      {live_render(
+        @conn,
+        Pinchflat.Pages.HistoryTableLive,
+        session: %{"media_state" => "errored"}
       )}
     </:tab>
     <:tab title="Active Tasks" id="active-tasks">

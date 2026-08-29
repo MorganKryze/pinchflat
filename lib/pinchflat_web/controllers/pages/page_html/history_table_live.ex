@@ -123,6 +123,12 @@ defmodule Pinchflat.Pages.HistoryTableLive do
     |> order_by(desc: :id)
   end
 
+  defp generate_base_query("errored") do
+    MediaQuery.new()
+    |> where(^dynamic(^MediaQuery.errored()))
+    |> order_by(desc: :last_error_at)
+  end
+
   defp format_datetime(nil), do: ""
 
   defp format_datetime(datetime) do

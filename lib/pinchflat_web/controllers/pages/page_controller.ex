@@ -27,7 +27,10 @@ defmodule PinchflatWeb.Pages.PageController do
       media_profile_count: Repo.aggregate(MediaProfile, :count, :id),
       source_count: Repo.aggregate(Source, :count, :id),
       media_item_size: Repo.aggregate(downloaded_media_items, :sum, :media_size_bytes),
-      media_item_count: Repo.aggregate(downloaded_media_items, :count, :id)
+      media_item_count: Repo.aggregate(downloaded_media_items, :count, :id),
+      # The dashboard counted four kinds of success and no kind of trouble, so a library
+      # quietly losing media looked exactly like one that was fine.
+      errored_count: Repo.aggregate(where(MediaQuery.new(), ^MediaQuery.errored()), :count, :id)
     )
   end
 
