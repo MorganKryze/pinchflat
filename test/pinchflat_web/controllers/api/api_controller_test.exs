@@ -5,6 +5,7 @@ defmodule PinchflatWeb.Api.ApiControllerTest do
   import Pinchflat.SourcesFixtures
 
   alias Pinchflat.Settings
+  alias Pinchflat.Downloading.MediaDownloadWorker
 
   defp token, do: Settings.get!(:route_token)
 
@@ -115,6 +116,112 @@ defmodule PinchflatWeb.Api.ApiControllerTest do
       conn = get(conn, "/api/v1/media/#{media_item.id}?route_token=#{token()}")
 
       assert json_response(conn, 200)["data"]["title"] == media_item.title
+    end
+  end
+
+  describe "POST /api/v1/sources/:source_id/downloads" do
+    test "queues everything pending", %{conn: conn} do
+      source = source_fixture()
+      _media_item = media_item_fixture(source_id: source.id, media_filepath: nil)
+
+      assert [] = all_enqueued(worker: MediaDownloadWorker)
+
+      conn = post(conn, "/api/v1/sources/#{source.id}/downloads?route_token=#{token()}")
+
+      assert json_response(conn, 200)["data"]["queued"]
+      assert [_] = all_enqueued(worker: MediaDownloadWorker)
+    end
+
+    test "asking twice does not queue twice", %{conn: conn} do
+      source = source_fixture()
+      _media_item = media_item_fixture(source_id: source.id, media_filepath: nil)
+
+      post(conn, "/api/v1/sources/#{source.id}/downloads?route_token=#{token()}")
+      post(conn, "/api/v1/sources/#{source.id}/downloads?route_token=#{token()}")
+
+      # The worker's uniqueness already guarantees this. Worth a test because a retry
+      # script that doubles the queue every time it runs is worse than no script.
+      assert [_only_one] = all_enqueued(worker: MediaDownloadWorker)
+    end
+
+    test "refuses without the token", %{conn: conn} do
+      source = source_fixture()
+
+      assert response(post(conn, "/api/v1/sources/#{source.id}/downloads"), 401)
+    end
+  end
+
+  describe "POST /api/v1/media/:media_item_id/downloads" do
+    test "queues one media item", %{conn: conn} do
+      media_item = media_item_fixture(media_filepath: nil)
+
+      conn = post(conn, "/api/v1/media/#{media_item.id}/downloads?route_token=#{token()}")
+
+      assert json_response(conn, 200)["data"]["queued"]
+      assert [_] = all_enqueued(worker: MediaDownloadWorker)
+    end
+
+    test "says so rather than pretending when it will not download", %{conn: conn} do
+      media_item = media_item_fixture(media_filepath: nil, prevent_download: true)
+
+      conn = post(conn, "/api/v1/media/#{media_item.id}/downloads?route_token=#{token()}")
+
+      # A script that asked for a download and got a 200 is entitled to believe one is
+      # coming.
+      assert json_response(conn, 409)["error"] =~ "not pending"
+      assert [] = all_enqueued(worker: MediaDownloadWorker)
+    end
+  end
+
+  describe "PATCH /api/v1/media/:id" do
+    test "sets a media item aside", %{conn: conn} do
+      media_item = media_item_fixture()
+
+      conn =
+        patch(conn, "/api/v1/media/#{media_item.id}?route_token=#{token()}", %{
+          "prevent_download" => true,
+          "blocked_reason" => "Deleted upstream"
+        })
+
+      body = json_response(conn, 200)["data"]
+
+      assert body["prevent_download"]
+      assert body["blocked_reason"] == "Deleted upstream"
+    end
+
+    test "records a reason even when none was given", %{conn: conn} do
+      media_item = media_item_fixture()
+
+      conn = patch(conn, "/api/v1/media/#{media_item.id}?route_token=#{token()}", %{"prevent_download" => true})
+
+      # A media item nothing will attempt again with no explanation is the defect this
+      # fork spent several commits removing. The API does not get to reintroduce it.
+      assert json_response(conn, 200)["data"]["blocked_reason"] == "Set aside via the API"
+    end
+
+    test "puts one back, clearing the reason with it", %{conn: conn} do
+      media_item = media_item_fixture(prevent_download: true, blocked_reason: "Age restricted")
+
+      conn = patch(conn, "/api/v1/media/#{media_item.id}?route_token=#{token()}", %{"prevent_download" => false})
+
+      body = json_response(conn, 200)["data"]
+
+      refute body["prevent_download"]
+      refute body["blocked_reason"]
+    end
+
+    test "ignores fields it was not asked to change", %{conn: conn} do
+      media_item = media_item_fixture(title: "Original")
+
+      patch(conn, "/api/v1/media/#{media_item.id}?route_token=#{token()}", %{
+        "prevent_download" => true,
+        "title" => "Rewritten"
+      })
+
+      # An allowlist rather than a changeset over whatever was sent. The interface's own
+      # forms replace every field they carry and blank the ones you forget; that is a
+      # trap worth not rebuilding.
+      assert Pinchflat.Media.get_media_item!(media_item.id).title == "Original"
     end
   end
 end
