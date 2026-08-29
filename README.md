@@ -77,6 +77,53 @@ cosign verify ghcr.io/morgankryze/pinchflat:stable \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
+### Running it, and going back
+
+Verify the image before you run it. That is what the signing is for, and a version tag is
+immutable where `stable` moves under you:
+
+```bash
+cosign verify ghcr.io/morgankryze/pinchflat:2026.8.29 \
+  --certificate-identity-regexp '^https://github.com/MorganKryze/pinchflat/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+**The first boot copies your database before it migrates.** SQLite runs in WAL mode here, so
+the copy goes through `VACUUM INTO` rather than through the filesystem, and you get a
+consistent single file whatever state the write-ahead log is in. It lands beside the
+database as `pinchflat.pre-migration-<timestamp>.db`. A boot with nothing pending copies
+nothing. If the copy fails the boot stops rather than migrating without it, and the log
+says so. Delete the file once the upgrade has proven itself; nothing prunes it for you.
+
+Once it is up, ask it what it knows. The token is in the OPML feed URL on any source page:
+
+```bash
+curl -s "http://<host>:8945/healthcheck/details?route_token=<token>" | jq
+```
+
+Three fields tell you the most on a library coming from upstream. `pending_without_job`
+counts media items that should download with no job that ever will. `set_aside_without_reason`
+counts what was silently taken out of rotation. `yt_dlp_last_update_error` says whether the
+self-update has been failing where nobody could see it.
+
+Leave every setting alone through the first index cycle. The defaults match upstream, so
+that run shows you the same behaviour you already had with instruments attached. Turn
+options on one at a time afterwards, so a change in behaviour has one candidate.
+
+**Going back to an upstream image** takes one command. Every migration this fork adds only
+adds columns, so rolling them back drops those columns and leaves everything upstream wrote
+untouched:
+
+```bash
+docker stop <container>
+docker run --rm -v /host/path/to/config:/config \
+  ghcr.io/morgankryze/pinchflat:2026.8.29 /app/bin/rollback_fork_migrations
+```
+
+It copies the database again first, under `pinchflat.pre-rollback-<timestamp>.db`, so the
+snapshot from the upgrade survives. After it runs, the upstream image opens the database
+without complaint.
+
 ### Defaults
 
 **Out of the box this fork behaves like upstream.** Every preference starts at upstream's value, so

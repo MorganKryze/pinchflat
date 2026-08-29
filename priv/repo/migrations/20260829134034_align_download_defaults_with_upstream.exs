@@ -25,5 +25,12 @@ defmodule Pinchflat.Repo.Migrations.AlignDownloadDefaultsWithUpstream do
     alter table(:settings) do
       remove :forced_download_priority
     end
+
+    # Restores the values this migration replaced, for the case where only this one is
+    # rolled back. Rolling back further removes these columns anyway, but a half-rolled
+    # back database that silently kept the new defaults would be a nasty thing to debug.
+    execute "UPDATE settings SET download_max_attempts = 5 WHERE download_max_attempts = 20;"
+
+    execute "UPDATE settings SET download_retry_backoff_base_seconds = 30 WHERE download_retry_backoff_base_seconds IS NULL;"
   end
 end

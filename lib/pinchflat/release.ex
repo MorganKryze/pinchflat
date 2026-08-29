@@ -5,21 +5,111 @@ defmodule Pinchflat.Release do
   """
   @app :pinchflat
 
+  # The FIRST migration this fork added, not the last upstream one. Ecto's `:to` is
+  # inclusive in both directions, so rolling back "to" the last upstream migration would
+  # take that one down with it - which on a first attempt quietly removed upstream's own
+  # restrict_filenames column. Rolling back to this one stops exactly at the boundary.
+  @first_fork_migration 20_260_829_125_750
+
   require Logger
 
   alias Pinchflat.Utils.FilesystemUtils
 
+  @doc """
+  Runs pending migrations, taking a copy of the database first if there are any.
+
+  A migration that adds a column cannot lose data, but going back to an older image is
+  not automatic once one has run, and finding that out on a library you care about is a
+  bad time to find it out. The copy costs a few seconds on an upgrade and nothing on a
+  boot with nothing pending.
+
+  Returns :ok
+  """
   def migrate do
     load_app()
 
     for repo <- repos() do
-      {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(repo, fn repo ->
+          case Ecto.Migrator.migrations(repo) |> Enum.filter(fn {status, _, _} -> status == :down end) do
+            [] ->
+              Logger.info("No pending migrations")
+
+            pending ->
+              Logger.info("#{length(pending)} pending migration(s)")
+              backup_database(repo)
+          end
+
+          Ecto.Migrator.run(repo, :up, all: true)
+        end)
     end
+
+    :ok
   end
 
+  @doc """
+  Rolls back to a migration version, which is how you produce a database an older image
+  can open.
+
+  Every migration this fork adds only adds columns, so rolling them back removes those
+  columns and the rows they held. Nothing upstream wrote is touched. Pass the last
+  version the older image knows about.
+
+  Returns :ok
+  """
   def rollback(repo, version) do
     load_app()
     {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :down, to: version))
+
+    :ok
+  end
+
+  @doc """
+  Rolls back everything this fork added, leaving a database the upstream image can open.
+
+  Takes a copy first, under a different name from the one `migrate/0` writes, so running
+  this does not overwrite the snapshot taken on the way up.
+
+  Returns :ok
+  """
+  def rollback_fork_migrations do
+    load_app()
+
+    for repo <- repos() do
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(repo, fn repo ->
+          backup_database(repo, "pre-rollback")
+
+          Ecto.Migrator.run(repo, :down, to: @first_fork_migration)
+        end)
+    end
+
+    :ok
+  end
+
+  # VACUUM INTO rather than a file copy: the database runs in WAL mode, so the file on
+  # disk is not the whole story and copying it can catch a partial write. This asks SQLite
+  # for a consistent single-file snapshot instead, whatever state the WAL is in.
+  defp backup_database(repo, label \\ "pre-migration") do
+    stamp = Calendar.strftime(DateTime.utc_now(), "%Y%m%d%H%M%S")
+    path = Path.join(database_directory(repo), "pinchflat.#{label}-#{stamp}.db")
+
+    Logger.info("Backing up the database to #{path}")
+
+    case repo.query("VACUUM INTO ?", [path]) do
+      {:ok, _} ->
+        Logger.info("Backup written. Delete it once the upgrade has proven itself")
+
+      {:error, error} ->
+        # Loud, and fatal. Migrating without the copy the operator was told they would get
+        # is worse than not migrating.
+        Logger.error("Could not back up the database: #{inspect(error)}")
+        raise "Database backup failed, refusing to migrate"
+    end
+  end
+
+  defp database_directory(repo) do
+    repo.config() |> Keyword.fetch!(:database) |> Path.dirname()
   end
 
   def check_file_permissions do

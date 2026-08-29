@@ -1,0 +1,5 @@
+#!/bin/sh
+# Produces a database the upstream image can open, by rolling back every migration this
+# fork added. Takes a copy first. Stop the container before running this.
+cd -P -- "$(dirname -- "$0")"
+exec ./pinchflat eval Pinchflat.Release.rollback_fork_migrations
