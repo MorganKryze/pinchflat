@@ -30,11 +30,12 @@ defmodule Pinchflat.YoutubeStatus.Switches do
   }
 
   @doc """
-  The switches there are.
+  The switches there are, in the order work happens: a video is indexed before it is
+  downloaded, so that is the order they are read and shown in.
 
   Returns [atom()]
   """
-  def names, do: Map.keys(@switches)
+  def names, do: [:indexing, :downloading]
 
   @doc """
   Whether a switch is on.

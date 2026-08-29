@@ -83,6 +83,17 @@ defmodule PinchflatWeb.PageControllerTest do
       refute Pinchflat.YoutubeStatus.Switches.any_paused?()
     end
 
+    test "says which half is stopped rather than reporting the queues as running", %{conn: conn} do
+      post(conn, ~p"/youtube_status/downloading/pause")
+
+      # "running" here would be answering the wrong question: three different things stop
+      # these queues and only one of them lifts itself.
+      response = html_response(get(conn, ~p"/youtube_status"), 200)
+
+      assert response =~ "downloading stopped by hand"
+      refute response =~ ">\n            running"
+    end
+
     test "the page then reads blue and offers to start it", %{conn: conn} do
       post(conn, ~p"/youtube_status/downloading/pause")
 

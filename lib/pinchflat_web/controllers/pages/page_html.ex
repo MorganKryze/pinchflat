@@ -61,6 +61,26 @@ defmodule PinchflatWeb.Pages.PageHTML do
   end
 
   @doc """
+  Why the yt-dlp queues are or are not running, in one phrase.
+
+  Three different reasons stop them and only one of them lifts itself, so "paused" on its
+  own would answer the wrong question.
+
+  Returns binary()
+  """
+  def queues_summary(health) do
+    stopped =
+      [{:indexing, health.indexing_paused}, {:downloading, health.downloading_paused}]
+      |> Enum.filter(&elem(&1, 1))
+      |> Enum.map(&to_string(elem(&1, 0)))
+
+    case stopped do
+      [] -> nil
+      names -> "#{Enum.join(names, " and ")} stopped by hand"
+    end
+  end
+
+  @doc """
   The fill for a state. Written out in full rather than built from a fragment, because
   Tailwind only ships the classes it can find in the source.
 

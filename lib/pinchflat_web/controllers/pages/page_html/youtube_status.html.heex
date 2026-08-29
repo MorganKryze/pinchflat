@@ -26,7 +26,7 @@
 
   <div class="flex flex-col gap-4 mt-6 md:flex-row md:gap-8">
     <div :for={switch <- @switches} class="flex items-center gap-4">
-      <span class="flex items-center gap-2 w-40">
+      <span class="flex items-center gap-2 w-36">
         <span class={["h-3 w-3 shrink-0 rounded-full", if(switch.paused, do: "bg-meta-5", else: "bg-meta-3")]}></span>
         <span class="text-white font-medium">{switch.label}</span>
       </span>
@@ -34,7 +34,7 @@
         <.button
           color={if switch.paused, do: "bg-meta-3", else: "bg-meta-4"}
           rounding="rounded-lg"
-          class="px-6 py-2 lg:px-6 xl:px-6"
+          class="px-6 py-2 text-sm lg:px-6 xl:px-6"
         >
           {if switch.paused, do: "Start", else: "Stop"}
         </.button>
@@ -92,6 +92,8 @@
             paused, asking again at <.datetime_in_zone datetime={@health.queues_paused_until} format="%H:%M" />
           <% @health.queues_paused_until -> %>
             paused until <.datetime_in_zone datetime={@health.queues_paused_until} format="%H:%M" />
+          <% summary = queues_summary(@health) -> %>
+            {summary}
           <% true -> %>
             running
         <% end %>
