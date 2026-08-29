@@ -79,6 +79,23 @@ defmodule PinchflatWeb.Sources.MediaItemTableLiveTest do
       assert html =~ "Ignored?"
     end
 
+    test "says how old an error is", %{conn: conn, source: source} do
+      _media_item =
+        media_item_fixture(
+          source_id: source.id,
+          media_filepath: nil,
+          last_error: "Sign in to confirm you're not a bot",
+          last_error_at: DateTime.add(DateTime.utc_now(), -6, :day)
+        )
+
+      {:ok, _view, html} = live_isolated(conn, MediaItemTableLive, session: create_session(source, "pending"))
+
+      # Without the age, a failure that resolved itself days ago reads as the current
+      # state of the media item.
+      assert html =~ "6 days ago"
+      assert html =~ "not a bot"
+    end
+
     test "shows why a media item was ignored when something recorded a reason", %{conn: conn, source: source} do
       _media_item =
         media_item_fixture(

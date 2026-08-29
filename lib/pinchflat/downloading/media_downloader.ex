@@ -35,18 +35,25 @@ defmodule Pinchflat.Downloading.MediaDownloader do
     case attempt_download_and_update_for_media_item(media_item, override_opts) do
       {:ok, media_item} ->
         # Returns {:ok, %MediaItem{}}
-        Media.update_media_item(media_item, %{last_error: nil})
+        Media.update_media_item(media_item, %{last_error: nil, last_error_at: nil})
 
       {:error, error_atom, message} ->
-        Media.update_media_item(media_item, %{last_error: StringUtils.wrap_string(message)})
+        Media.update_media_item(media_item, error_attrs(message))
 
         {:error, error_atom, message}
 
       {:recovered, media_item, message} ->
-        {:ok, updated_media_item} = Media.update_media_item(media_item, %{last_error: StringUtils.wrap_string(message)})
+        {:ok, updated_media_item} = Media.update_media_item(media_item, error_attrs(message))
 
         {:recovered, updated_media_item, message}
     end
+  end
+
+  # An error and the moment it was written, together. They are only ever set as a pair:
+  # a message with no timestamp is what let the UI present a week-old failure as the
+  # current state of a media item.
+  defp error_attrs(message) do
+    %{last_error: StringUtils.wrap_string(message), last_error_at: DateTime.utc_now()}
   end
 
   # Looks complicated, but here's the key points:

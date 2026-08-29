@@ -5,6 +5,7 @@ defmodule PinchflatWeb.Sources.MediaItemTableLive do
   alias Pinchflat.Repo
   alias Pinchflat.Sources
   alias Pinchflat.Utils.NumberUtils
+  alias PinchflatWeb.CustomComponents.TextComponents
 
   @limit 10
 
@@ -50,7 +51,7 @@ defmodule PinchflatWeb.Sources.MediaItemTableLive do
           <section class="flex items-center space-x-1">
             <.tooltip
               :if={media_item.last_error}
-              tooltip={media_item.last_error}
+              tooltip={TextComponents.error_with_age(media_item.last_error, media_item.last_error_at)}
               position="bottom-right"
               tooltip_class="w-64"
             >
@@ -230,6 +231,6 @@ defmodule PinchflatWeb.Sources.MediaItemTableLive do
 
   # Selecting only what we need GREATLY speeds up queries on large tables
   defp select_fields do
-    [:id, :title, :uploaded_at, :prevent_download, :blocked_reason, :last_error]
+    [:id, :title, :uploaded_at, :prevent_download, :blocked_reason, :last_error, :last_error_at]
   end
 end

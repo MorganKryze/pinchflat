@@ -124,6 +124,29 @@ defmodule PinchflatWeb.CustomComponents.TextComponents do
   end
 
   @doc """
+  Renders how long ago a UTC datetime was, eg "6 days ago"
+  """
+  attr :datetime, :any, required: true
+
+  def time_ago(assigns) do
+    ~H"""
+    <time>{Timex.from_now(@datetime)}</time>
+    """
+  end
+
+  @doc """
+  Prefixes an error message with its age, for the places that can only show a string.
+
+  An error sits unchanged until the next attempt on that media item, which can be days,
+  so the message alone reads as the current state of something long since resolved.
+
+  Returns binary() | nil
+  """
+  def error_with_age(nil, _at), do: nil
+  def error_with_age(error, nil), do: error
+  def error_with_age(error, at), do: "#{Timex.from_now(at)}: #{error}"
+
+  @doc """
   Renders a localized number using the Intl.NumberFormat API, falling back to the raw number if needed
   """
   attr :number, :any, required: true

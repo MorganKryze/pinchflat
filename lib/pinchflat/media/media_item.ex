@@ -41,6 +41,7 @@ defmodule Pinchflat.Media.MediaItem do
     :metadata_filepath,
     :nfo_filepath,
     :last_error,
+    :last_error_at,
     # These are user or system controlled fields
     :prevent_download,
     :blocked_reason,
@@ -91,6 +92,9 @@ defmodule Pinchflat.Media.MediaItem do
     field :subtitle_filepaths, {:array, {:array, :string}}, default: []
 
     field :last_error, :string
+    # When last_error was written. It can sit unchanged for days, so the UI needs to be
+    # able to say how old it is rather than presenting it as current.
+    field :last_error_at, :utc_datetime
     field :prevent_download, :boolean, default: false
     # Why `prevent_download` was set, if anything set it automatically. Unlike `last_error`
     # this is never cleared by a later attempt - a media item nothing will attempt again

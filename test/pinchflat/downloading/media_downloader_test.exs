@@ -82,6 +82,40 @@ defmodule Pinchflat.Downloading.MediaDownloaderTest do
       assert {:error, :unknown, message} = MediaDownloader.download_for_media_item(media_item)
       assert message == "Unknown error: {:error, :some_error}"
     end
+
+    test "timestamps the error alongside the message", %{media_item: media_item} do
+      expect(YtDlpRunnerMock, :run, 2, fn
+        _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}
+        _url, :download, _opts, _ot, _addl -> {:error, "some error", 1}
+      end)
+
+      MediaDownloader.download_for_media_item(media_item)
+
+      media_item = Repo.reload(media_item)
+
+      # The pair is the point: a message with no timestamp is what let the UI show a
+      # days-old failure as the media item's current state.
+      assert media_item.last_error == "some error"
+      assert %DateTime{} = media_item.last_error_at
+    end
+
+    test "clears the timestamp when a download finally succeeds", %{media_item: media_item} do
+      expect(YtDlpRunnerMock, :run, 3, fn
+        _url, :get_downloadable_status, _opts, _ot, _addl -> {:ok, "{}"}
+        _url, :download_thumbnail, _opts, _ot, _addl -> {:ok, ""}
+        _url, :download, _opts, _ot, _addl -> {:ok, render_metadata(:media_metadata)}
+      end)
+
+      {:ok, media_item} =
+        Media.update_media_item(media_item, %{last_error: "old", last_error_at: DateTime.utc_now()})
+
+      MediaDownloader.download_for_media_item(media_item)
+
+      media_item = Repo.reload(media_item)
+
+      refute media_item.last_error
+      refute media_item.last_error_at
+    end
   end
 
   describe "download_for_media_item/3 when testing non-downloadable media" do

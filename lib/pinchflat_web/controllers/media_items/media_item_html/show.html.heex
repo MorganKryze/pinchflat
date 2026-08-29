@@ -37,6 +37,9 @@
             <div class="flex items-center gap-1 mb-2">
               <.icon name="hero-exclamation-circle-solid" class="text-red-500" />
               <h3 class="font-bold text-xl">Last Error</h3>
+              <span :if={@media_item.last_error_at} class="text-bodydark">
+                (<.time_ago datetime={@media_item.last_error_at} />)
+              </span>
             </div>
             <span>{@media_item.last_error}</span>
           </section>

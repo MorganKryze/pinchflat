@@ -32,7 +32,7 @@ defmodule Pinchflat.Pages.HistoryTableLive do
             <section class="flex items-center space-x-1">
               <.tooltip
                 :if={media_item.last_error}
-                tooltip={media_item.last_error}
+                tooltip={TextComponents.error_with_age(media_item.last_error, media_item.last_error_at)}
                 position="bottom-right"
                 tooltip_class="w-64"
               >
