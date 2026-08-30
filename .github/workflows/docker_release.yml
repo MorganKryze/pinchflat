@@ -171,9 +171,14 @@ jobs:
           # Without this the action adds `latest` by itself, which is exactly the tag that
           # must not move before the signature has been verified.
           flavor: latest=false
-          # Versions are CalVer (`v2026.9.5`), which parses as semver. `{{major}}` is
-          # deliberately absent: on CalVer it would mean "the last release of 2026", a tag
-          # that floats for a year and tells a puller nothing.
+          # Versions are semver (`v1.4.2`). Patch for a fix, minor for a feature, major
+          # for anything that changes how an existing instance behaves without being
+          # asked - which on a fork whose whole premise is "defaults match upstream"
+          # should be close to never.
+          #
+          # `{{major}}` is deliberately absent. `stable` and `latest` already mean "the
+          # newest one that verified", and a bare `1` floating across every feature
+          # release would be a third way of saying nearly the same thing.
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
