@@ -19,16 +19,16 @@ defmodule PinchflatWeb.Pages.PageHTML do
 
   Returns binary()
   """
-  def status_detail(%{state: :disabled} = current) do
-    "Nothing ran in the last #{window_phrase(current)} because a switch below is off, " <>
-      "so there is nothing to report about YouTube."
+  def status_detail(%{state: :disabled} = current, health) do
+    "Nothing ran in the last #{window_phrase(current)}: #{quiet_cause(health)}. " <>
+      "There is nothing to report about YouTube while that is true."
   end
 
-  def status_detail(%{state: :idle} = current) do
+  def status_detail(%{state: :idle} = current, _health) do
     "Nothing was downloaded or indexed in the last #{window_phrase(current)}, so there is nothing to report."
   end
 
-  def status_detail(current) do
+  def status_detail(current, _health) do
     parts = [
       "#{current.downloads} downloaded",
       "#{current.connection_failures} refused#{throttle_aside(current)}",
@@ -37,6 +37,40 @@ defmodule PinchflatWeb.Pages.PageHTML do
 
     "In the last #{window_phrase(current)}: #{Enum.join(parts, ", ")}."
   end
+
+  @doc """
+  What one queue is actually doing, which is not the same as where its switch is set.
+
+  Returns binary()
+  """
+  def switch_status(%{paused: true, backoff_until: nil}), do: "stopped by hand"
+
+  def switch_status(%{paused: true, backoff_until: until}),
+    do: "stopped by hand, and held by the backoff until #{local_time(until)}"
+
+  def switch_status(%{backoff_until: nil}), do: "running"
+  def switch_status(%{backoff_until: until}), do: "paused by the backoff until #{local_time(until)}"
+
+  @doc """
+  The dot beside a queue: blue when somebody stopped it, orange when the backoff is
+  holding it, green when it is genuinely running.
+
+  Returns binary()
+  """
+  def switch_colour(%{paused: true}), do: "bg-meta-5"
+  def switch_colour(%{backoff_until: nil}), do: "bg-meta-3"
+  def switch_colour(_switch), do: "bg-meta-8"
+
+  @doc """
+  Whether pressing the button will change what the queue does, as opposed to only where
+  its switch is set. Starting a queue the backoff is holding is a real change that has no
+  visible effect until the pause ends, and saying so beats letting somebody press it twice.
+
+  Returns boolean()
+  """
+  def switch_takes_effect_now?(%{paused: true, backoff_until: nil}), do: true
+  def switch_takes_effect_now?(%{paused: true}), do: false
+  def switch_takes_effect_now?(_switch), do: true
 
   @doc """
   The name of a range, as a tab reads it.
@@ -95,15 +129,38 @@ defmodule PinchflatWeb.Pages.PageHTML do
   Returns binary()
   """
   def queues_summary(health) do
-    stopped =
-      [{:indexing, health.indexing_paused}, {:downloading, health.downloading_paused}]
-      |> Enum.filter(&elem(&1, 1))
-      |> Enum.map(&to_string(elem(&1, 0)))
-
-    case stopped do
+    case stopped_by_hand(health) do
       [] -> nil
       names -> "#{Enum.join(names, " and ")} stopped by hand"
     end
+  end
+
+  # Both causes can be true at once, and a page that named only one would be answering
+  # half the question.
+  defp quiet_cause(health) do
+    backoff =
+      if health.queues_paused_until,
+        do: "the backoff is holding the queues until #{local_time(health.queues_paused_until)}"
+
+    switches =
+      case stopped_by_hand(health) do
+        [] -> nil
+        names -> "#{Enum.join(names, " and ")} is stopped by hand"
+      end
+
+    [backoff, switches] |> Enum.reject(&is_nil/1) |> Enum.join(", and ")
+  end
+
+  defp stopped_by_hand(health) do
+    [{:indexing, health.indexing_paused}, {:downloading, health.downloading_paused}]
+    |> Enum.filter(&elem(&1, 1))
+    |> Enum.map(&to_string(elem(&1, 0)))
+  end
+
+  defp local_time(datetime) do
+    timezone = Application.get_env(:pinchflat, :timezone)
+
+    Calendar.strftime(Timex.Timezone.convert(datetime, timezone), "%H:%M")
   end
 
   @doc """

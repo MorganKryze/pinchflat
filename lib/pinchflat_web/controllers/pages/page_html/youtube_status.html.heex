@@ -11,7 +11,7 @@
     <span class={["h-4 w-4 shrink-0 rounded-full", status_colour(@current.state)]}></span>
     <div>
       <h3 class="text-title-sm font-bold text-white">{status_headline(@current.state)}</h3>
-      <p class="text-sm mt-1">{status_detail(@current)}</p>
+      <p class="text-sm mt-1">{status_detail(@current, @health)}</p>
     </div>
   </div>
 </div>
@@ -28,18 +28,25 @@
         label and its button follows the length of the word, which reads as a mistake. --%>
   <div class="mt-5 max-w-md divide-y divide-strokedark border-y border-strokedark">
     <div :for={switch <- @switches} class="flex items-center justify-between gap-4 py-3">
-      <span class="flex items-center gap-3">
-        <span class={["h-3 w-3 shrink-0 rounded-full", if(switch.paused, do: "bg-meta-5", else: "bg-meta-3")]}></span>
+      <span class="flex flex-wrap items-center gap-x-3">
+        <span class={["h-3 w-3 shrink-0 rounded-full", switch_colour(switch)]}></span>
         <span class="text-white font-medium">{switch.label}</span>
-        <span class="text-sm">{if switch.paused, do: "stopped", else: "running"}</span>
+        <span class="text-sm">{switch_status(switch)}</span>
       </span>
       <%!-- A plain button rather than the page-action component, which is sized for a
             form footer and towers over a row in a list. --%>
       <.link href={~p"/youtube_status/#{switch.name}/#{if switch.paused, do: "resume", else: "pause"}"} method="post">
-        <button class={[
-          "w-24 rounded-lg py-2 text-sm font-medium text-white hover:bg-opacity-90",
-          if(switch.paused, do: "bg-meta-3", else: "bg-meta-4")
-        ]}>
+        <button
+          class={[
+            "w-24 rounded-lg py-2 text-sm font-medium text-white hover:bg-opacity-90",
+            if(switch.paused, do: "bg-meta-3", else: "bg-meta-4")
+          ]}
+          title={
+            if switch.paused && !switch_takes_effect_now?(switch),
+              do:
+                "Sets the switch back to running. The backoff is holding this queue, so nothing moves until that lifts."
+          }
+        >
           {if switch.paused, do: "Start", else: "Stop"}
         </button>
       </.link>

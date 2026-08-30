@@ -33,6 +33,46 @@ defmodule PinchflatWeb.PageControllerTest do
       assert html_response(get(conn, ~p"/youtube_status?range=decade"), 200) =~ "Last 24 hours"
     end
 
+    test "does not call a queue running while the backoff is holding it", %{conn: conn} do
+      Settings.set(
+        download_backoff_paused_until: DateTime.utc_now() |> DateTime.add(40, :minute) |> DateTime.truncate(:second)
+      )
+
+      response = html_response(get(conn, ~p"/youtube_status"), 200)
+
+      # The switch is off and the queue is stopped anyway. Reporting the switch position
+      # as the queue state told the reader that indexing was running while Oban had it
+      # paused, next to a headline saying nothing had been attempted.
+      assert response =~ "paused by the backoff"
+      refute response =~ ">running<"
+    end
+
+    test "reads blue when the backoff is the reason for the quiet", %{conn: conn} do
+      Settings.set(
+        download_backoff_paused_until: DateTime.utc_now() |> DateTime.add(40, :minute) |> DateTime.truncate(:second)
+      )
+
+      response = html_response(get(conn, ~p"/youtube_status"), 200)
+
+      # Quiet we caused, same as a switch. Grey would be the lie the blue exists to avoid.
+      assert response =~ "Stopped on purpose"
+      assert response =~ "the backoff is holding the queues until"
+    end
+
+    test "names both reasons when both are true", %{conn: conn} do
+      Settings.set(
+        download_backoff_paused_until: DateTime.utc_now() |> DateTime.add(40, :minute) |> DateTime.truncate(:second)
+      )
+
+      Pinchflat.YoutubeStatus.Switches.set(:downloading, true)
+
+      response = html_response(get(conn, ~p"/youtube_status"), 200)
+
+      assert response =~ "the backoff is holding the queues until"
+      assert response =~ "downloading is stopped by hand"
+      assert response =~ "held by the backoff until"
+    end
+
     test "reads green once a download has got through", %{conn: conn} do
       media_item_fixture(%{
         media_downloaded_at: DateTime.utc_now() |> DateTime.add(-5, :minute) |> DateTime.truncate(:second)

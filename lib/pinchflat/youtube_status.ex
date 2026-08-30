@@ -34,6 +34,12 @@ defmodule Pinchflat.YoutubeStatus do
   it does not overrule evidence: with indexing stopped by hand and downloading left on, a
   refused download still reads as a refusal. Anything else would hide a real block behind
   a switch that has nothing to do with it.
+
+  It covers both ways the queues stop: a switch somebody set, and the automatic backoff
+  holding them after a run of refusals. Both are us deciding not to ask. Reporting a
+  backoff pause as `:idle` would be the same lie the grey was introduced to avoid - quiet
+  we caused, reported as an absence of information - and it is the one that lasts longest,
+  since a pause at the ceiling runs for hours.
   """
 
   import Ecto.Query, warn: false
@@ -43,6 +49,7 @@ defmodule Pinchflat.YoutubeStatus do
   alias Pinchflat.Downloading.DownloadErrors
   alias Pinchflat.YoutubeStatus.Switches
   alias Pinchflat.YoutubeStatus.StatusSample
+  alias Pinchflat.Downloading.DownloadBackoff
 
   # Both indexing workers, named as strings because that is how Oban stores them. Only
   # these two talk to YouTube to list a collection; `remote_metadata` is not here because
@@ -248,9 +255,18 @@ defmodule Pinchflat.YoutubeStatus do
   # that. Kept out of `state_for/1` so that function stays a pure reading of the counts.
   defp reading(counts) do
     case state_for(counts) do
-      :idle -> if Switches.any_paused?(), do: :disabled, else: :idle
+      :idle -> if quiet_is_ours?(), do: :disabled, else: :idle
       state -> state
     end
+  end
+
+  @doc """
+  Whether the queues are stopped, by a switch or by the backoff.
+
+  Returns boolean()
+  """
+  def quiet_is_ours? do
+    Switches.any_paused?() || DownloadBackoff.paused_until() != nil
   end
 
   @doc """

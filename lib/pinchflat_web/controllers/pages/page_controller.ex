@@ -8,6 +8,7 @@ defmodule PinchflatWeb.Pages.PageController do
   alias Pinchflat.Profiles.MediaProfile
   alias Pinchflat.YoutubeStatus.Switches
   alias Pinchflat.Downloading.DownloadHealth
+  alias Pinchflat.Downloading.DownloadBackoff
 
   # What each colour claims, said once so the page and the tests read the same list.
   @legend [
@@ -15,7 +16,7 @@ defmodule PinchflatWeb.Pages.PageController do
     degraded: "indexing works, downloads refused",
     blocked: "both refused",
     idle: "nothing attempted",
-    disabled: "stopped by hand",
+    disabled: "stopped on purpose",
     no_data: "nothing measuring"
   ]
 
@@ -75,8 +76,17 @@ defmodule PinchflatWeb.Pages.PageController do
   end
 
   defp switch_states do
+    # The backoff holds every one of these queues too, and it is not a switch. A row that
+    # reported only the switch said "running" while Oban had the queue stopped.
+    backoff_until = DownloadBackoff.paused_until()
+
     Enum.map(Switches.names(), fn name ->
-      %{name: name, label: @switch_labels[name], paused: Switches.paused?(name)}
+      %{
+        name: name,
+        label: @switch_labels[name],
+        paused: Switches.paused?(name),
+        backoff_until: backoff_until
+      }
     end)
   end
 
