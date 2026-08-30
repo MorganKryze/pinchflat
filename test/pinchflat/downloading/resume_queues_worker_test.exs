@@ -94,4 +94,47 @@ defmodule Pinchflat.Downloading.ResumeQueuesWorkerTest do
       assert DownloadBackoff.paused_until() == nil
     end
   end
+
+  describe "schedule_for/1" do
+    defp pending_resumes do
+      Oban.Job
+      |> where([j], j.worker == ^inspect(ResumeQueuesWorker) and j.state in ["available", "scheduled"])
+      |> Repo.all()
+    end
+
+    test "the newest decision wins outright" do
+      early = DateTime.utc_now() |> DateTime.add(35, :minute) |> DateTime.truncate(:second)
+      late = DateTime.utc_now() |> DateTime.add(70, :minute) |> DateTime.truncate(:second)
+
+      {:ok, _first} = ResumeQueuesWorker.schedule_for(early)
+      {:ok, _second} = ResumeQueuesWorker.schedule_for(late)
+
+      # Oban's uniqueness answers {:ok, <the other one>} without inserting, so on a real
+      # instance the setting said 13:30 and the queues came back at 12:54 - the losing
+      # insert was the one that had just written the setting.
+      assert [job] = pending_resumes()
+      assert DateTime.compare(job.scheduled_at, late) == :eq
+    end
+
+    test "the setting and the queue agree after an extension" do
+      Settings.set(download_backoff_minutes: 30)
+      Settings.set(download_backoff_escalate: true)
+
+      DownloadBackoff.extend()
+      DownloadBackoff.extend()
+
+      assert [job] = pending_resumes()
+      assert_in_delta DateTime.diff(job.scheduled_at, DownloadBackoff.paused_until()), 0, 1
+    end
+
+    test "a resume called off is visible rather than gone" do
+      ResumeQueuesWorker.schedule_for(DateTime.utc_now() |> DateTime.add(10, :minute))
+      ResumeQueuesWorker.schedule_for(DateTime.utc_now() |> DateTime.add(20, :minute))
+
+      cancelled = Oban.Job |> where([j], j.state == "cancelled") |> Repo.all()
+
+      assert length(cancelled) == 1
+      assert hd(cancelled).cancelled_at
+    end
+  end
 end

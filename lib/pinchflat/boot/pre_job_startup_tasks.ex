@@ -15,6 +15,7 @@ defmodule Pinchflat.Boot.PreJobStartupTasks do
   alias Pinchflat.Repo
   alias Pinchflat.Settings
   alias Pinchflat.Utils.FilesystemUtils
+  alias Pinchflat.Downloading.ResumeQueuesWorker
 
   alias Pinchflat.Lifecycle.UserScripts.CommandRunner, as: UserScriptRunner
 
@@ -81,6 +82,13 @@ defmodule Pinchflat.Boot.PreJobStartupTasks do
   # Cleared rather than re-applied: a restart is a fresh start. If the block is still
   # there, the next refusals trip the threshold again within minutes, and the failures
   # that would trip it are already recorded.
+  #
+  # The scheduled resume goes with it, and that is not tidiness. Left in flight it runs
+  # against queues that are no longer paused, probes, and writes a new pause - while a
+  # throttled download, free to run because the pause was just cleared, has already
+  # scheduled a resume of its own. Whichever wrote the setting last is the one Oban's
+  # uniqueness silently drops. Measured on a real instance: the setting said 13:30 and the
+  # queues came back at 12:54.
   defp clear_stale_queue_pause do
     case Settings.get!(:download_backoff_paused_until) do
       nil ->
@@ -90,6 +98,11 @@ defmodule Pinchflat.Boot.PreJobStartupTasks do
         Logger.info("Clearing a queue pause that was set to last until #{until}: a restart resets it")
         Settings.set(download_backoff_paused_until: nil)
         Settings.set(download_backoff_extensions: 0)
+
+        case ResumeQueuesWorker.cancel_pending() do
+          0 -> :ok
+          count -> Logger.info("Cancelled #{count} scheduled resume(s) left over from before the restart")
+        end
     end
   end
 

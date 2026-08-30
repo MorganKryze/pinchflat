@@ -68,6 +68,21 @@ defmodule Pinchflat.Boot.PreJobStartupTasksTest do
       assert Settings.get!(:download_backoff_extensions) == 0
     end
 
+    test "calls off a resume that was still in flight" do
+      Settings.set(
+        download_backoff_paused_until: DateTime.utc_now() |> DateTime.add(30, :minute) |> DateTime.truncate(:second)
+      )
+
+      {:ok, job} = Pinchflat.Downloading.ResumeQueuesWorker.schedule_for(DateTime.utc_now() |> DateTime.add(5, :minute))
+
+      # Left scheduled it runs against queues that are no longer paused, probes, and
+      # writes a pause that a concurrently-scheduled resume will then ignore. Measured:
+      # the setting said 13:30 and the queues came back at 12:54.
+      PreJobStartupTasks.init(%{})
+
+      assert Repo.reload!(job).state == "cancelled"
+    end
+
     test "does nothing when no pause was set" do
       PreJobStartupTasks.init(%{})
 
